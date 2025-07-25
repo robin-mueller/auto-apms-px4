@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>auto_apms_px4_behavior</name>
+  <version>0.0.0</version>
+  <description>Plugins for behavior-based applications incorporating auto_apms_px4</description>
+  <maintainer email="mue.robin@icloud.com">Robin Müller</maintainer>
+  <license>Apache License 2.0</license>
+  <url>https://robin-mueller.github.io/auto-apms-guide/</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>eigen3_cmake_module</buildtool_depend>
+
+  <depend>auto_apms_behavior_tree_core</depend>
+  <depend>eigen</depend>
+  <depend>px4_msgs</depend>
+  <depend>auto_apms_px4_interfaces</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,39 @@
+Arm:
+  class_name: auto_apms_px4_behavior::ArmAction
+  port: arm_disarm
+
+Disarm:
+  class_name: auto_apms_px4_behavior::DisarmAction
+  port: arm_disarm
+
+EnableHold:
+  class_name: auto_apms_px4_behavior::EnableHoldAction
+  port: enable_hold
+
+GoTo:
+  class_name: auto_apms_px4_behavior::GoToAction
+  port: go_to_(input:frame)
+
+Land:
+  class_name: auto_apms_px4_behavior::LandAction
+  port: land
+
+Mission:
+  class_name: auto_apms_px4_behavior::MissionAction
+  port: mission
+
+RTL:
+  class_name: auto_apms_px4_behavior::RTLAction
+  port: rtl
+
+Takeoff:
+  class_name: auto_apms_px4_behavior::TakeoffAction
+  port: takeoff
+
+GetGlobalPosition:
+  class_name: auto_apms_px4_behavior::GetPosition<GlobalPositionMsg>
+  port: /fmu/out/vehicle_global_position
+
+GetLocalPosition:
+  class_name: auto_apms_px4_behavior::GetPosition<LocalPositionMsg>
+  port: /fmu/out/vehicle_local_position
