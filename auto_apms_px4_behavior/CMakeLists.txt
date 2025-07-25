@@ -44,16 +44,16 @@ ament_target_dependencies(behavior_tree_nodes
     auto_apms_px4_interfaces
 )
 auto_apms_behavior_tree_declare_nodes(behavior_tree_nodes
-    "auto_apms_px4_behavior::ArmAction"
-    "auto_apms_px4_behavior::DisarmAction"
-    "auto_apms_px4_behavior::EnableHoldAction"
-    "auto_apms_px4_behavior::GoToAction"
-    "auto_apms_px4_behavior::LandAction"
-    "auto_apms_px4_behavior::MissionAction"
-    "auto_apms_px4_behavior::RTLAction"
-    "auto_apms_px4_behavior::TakeoffAction"
-    "auto_apms_px4_behavior::GetPosition<GlobalPositionMsg>"
-    "auto_apms_px4_behavior::GetPosition<LocalPositionMsg>"
+    "${PROJECT_NAME}::ArmAction"
+    "${PROJECT_NAME}::DisarmAction"
+    "${PROJECT_NAME}::EnableHoldAction"
+    "${PROJECT_NAME}::GoToAction"
+    "${PROJECT_NAME}::LandAction"
+    "${PROJECT_NAME}::MissionAction"
+    "${PROJECT_NAME}::RTLAction"
+    "${PROJECT_NAME}::TakeoffAction"
+    "${PROJECT_NAME}::GetPosition<GlobalPositionMsg>"
+    "${PROJECT_NAME}::GetPosition<LocalPositionMsg>"
     NODE_MANIFEST
     "config/behavior_tree_nodes.yaml.in"
     NODE_MODEL_HEADER_TARGET ${PROJECT_NAME}

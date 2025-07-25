@@ -1,39 +1,39 @@
 Arm:
-  class_name: auto_apms_px4_behavior::ArmAction
+  class_name: ${PROJECT_NAME}::ArmAction
   port: arm_disarm
 
 Disarm:
-  class_name: auto_apms_px4_behavior::DisarmAction
+  class_name: ${PROJECT_NAME}::DisarmAction
   port: arm_disarm
 
 EnableHold:
-  class_name: auto_apms_px4_behavior::EnableHoldAction
+  class_name: ${PROJECT_NAME}::EnableHoldAction
   port: enable_hold
 
 GoTo:
-  class_name: auto_apms_px4_behavior::GoToAction
+  class_name: ${PROJECT_NAME}::GoToAction
   port: go_to_(input:frame)
 
 Land:
-  class_name: auto_apms_px4_behavior::LandAction
+  class_name: ${PROJECT_NAME}::LandAction
   port: land
 
 Mission:
-  class_name: auto_apms_px4_behavior::MissionAction
+  class_name: ${PROJECT_NAME}::MissionAction
   port: mission
 
 RTL:
-  class_name: auto_apms_px4_behavior::RTLAction
+  class_name: ${PROJECT_NAME}::RTLAction
   port: rtl
 
 Takeoff:
-  class_name: auto_apms_px4_behavior::TakeoffAction
+  class_name: ${PROJECT_NAME}::TakeoffAction
   port: takeoff
 
 GetGlobalPosition:
-  class_name: auto_apms_px4_behavior::GetPosition<GlobalPositionMsg>
+  class_name: ${PROJECT_NAME}::GetPosition<GlobalPositionMsg>
   port: /fmu/out/vehicle_global_position
 
 GetLocalPosition:
-  class_name: auto_apms_px4_behavior::GetPosition<LocalPositionMsg>
+  class_name: ${PROJECT_NAME}::GetPosition<LocalPositionMsg>
   port: /fmu/out/vehicle_local_position
