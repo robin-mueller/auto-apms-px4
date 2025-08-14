@@ -60,6 +60,6 @@ repos:
     hooks:
       - id: ament_copyright
         name: ament_copyright
-        entry: bash -c "source /opt/ros/jazzy/setup.bash && exec ament_copyright --add-missing 'Robin Müller' apache2"
+        entry: ament_copyright --add-missing "Robin Müller" apache2
         language: system
         types: [file]

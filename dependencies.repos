@@ -3,7 +3,7 @@ repositories:
   dep/auto-apms:
     type: git
     url: https://github.com/robin-mueller/auto-apms.git
-    version: jazzy
+    version: master
 
   # PX4
   dep/px4_msgs:
