@@ -43,7 +43,7 @@ ament_target_dependencies(behavior_tree_nodes
     px4_msgs
     auto_apms_px4_interfaces
 )
-auto_apms_behavior_tree_declare_nodes(behavior_tree_nodes
+auto_apms_behavior_tree_register_nodes(behavior_tree_nodes
     "${PROJECT_NAME}::ArmAction"
     "${PROJECT_NAME}::DisarmAction"
     "${PROJECT_NAME}::EnableHoldAction"
@@ -63,7 +63,7 @@ auto_apms_behavior_tree_declare_nodes(behavior_tree_nodes
 # ------------ Behavior Trees --------------
 #
 
-auto_apms_behavior_tree_declare_trees(
+auto_apms_behavior_tree_register_trees(
     "behavior/relative_goto.xml"
     NODE_MANIFEST
     "auto_apms_behavior_tree::behavior_tree_nodes"
