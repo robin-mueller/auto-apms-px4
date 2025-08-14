@@ -23,13 +23,17 @@
 #include "px4_ros2/utils/message_version.hpp"
 
 /**
- * @defgroup auto_apms_px4 PX4 Bridge
+ * @defgroup auto_apms_px4 PX4 Integration
  * @brief Methods for using [PX4 Autopilot](https://px4.io/) together with AutoAPMS.
  *
  * We allow controlling autonomous sytems running PX4 by incorporating the [PX4/ROS2 Control
- * Interface](https://docs.px4.io/main/en/ros2/px4_ros2_control_interface.html) and allow the user to define custom
- * modes that can be dynamically registered with the autopilot. These modes are written in ROS 2 and run externally
- * while communicating with PX4 using the internal [uORB messages](https://docs.px4.io/main/en/middleware/uorb.html).
+ * Interface](https://docs.px4.io/main/en/ros2/px4_ros2_control_interface.html). The user is able to define custom
+ * modes that can be dynamically registered with the autopilot. These modes are written in ROS 2 and communicate
+ * with PX4 using the internal [uORB messages](https://docs.px4.io/main/en/middleware/uorb.html).
+ *
+ * > [!note]
+ * > The required packages are hosted in a separate repository thus not part of standard AutoAPMS.
+ * > Visit [auto-apms-px4](https://github.com/robin-mueller/auto-apms-px4) for more info.
  */
 
 /**
