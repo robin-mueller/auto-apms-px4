@@ -49,4 +49,4 @@ public:
 
 }  // namespace auto_apms_px4_behavior
 
-AUTO_APMS_BEHAVIOR_TREE_DECLARE_NODE(auto_apms_px4_behavior::ArmAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::ArmAction)
