@@ -1,39 +1,63 @@
 Arm:
   class_name: ${PROJECT_NAME}::ArmAction
-  port: arm_disarm
+  description: "Arms the vehicle, making it ready for takeoff"
+  topic: arm_disarm
 
 Disarm:
   class_name: ${PROJECT_NAME}::DisarmAction
-  port: arm_disarm
+  description: "Disarms the vehicle if it is landed"
+  topic: arm_disarm
 
 EnableHold:
   class_name: ${PROJECT_NAME}::EnableHoldAction
-  port: enable_hold
+  description: "Enables or disables the position loiter mode"
+  topic: enable_hold
 
 GoTo:
   class_name: ${PROJECT_NAME}::GoToAction
-  port: go_to_(input:frame)
+  description: "Commands the vehicle to go to a specified position. The reference frame can be set via the 'frame' input port"
+  topic: go_to_(input:frame)
+
+GoToLocal:
+  class_name: ${PROJECT_NAME}::GoToAction
+  description: "Commands the vehicle to go to a specified position in the local coordinate frame"
+  topic: go_to_(input:frame)
+  port_defaults:
+    frame: local
+
+GoToGlobal:
+  class_name: ${PROJECT_NAME}::GoToAction
+  description: "Commands the vehicle to go to a specified position in the global coordinate frame"
+  topic: go_to_(input:frame)
+  port_defaults:
+    frame: global
 
 Land:
   class_name: ${PROJECT_NAME}::LandAction
-  port: land
+  description: "Commands the vehicle to land at its current position"
+  topic: land
 
 Mission:
   class_name: ${PROJECT_NAME}::MissionAction
-  port: mission
+  description: "Starts a mission that has been previously uploaded to the vehicle"
+  topic: mission
 
 RTL:
   class_name: ${PROJECT_NAME}::RTLAction
-  port: rtl
+  description: "Commands the vehicle to return to its home position and land"
+  topic: rtl
 
 Takeoff:
   class_name: ${PROJECT_NAME}::TakeoffAction
-  port: takeoff
+  description: "Commands the vehicle to take off to a specified altitude"
+  topic: takeoff
 
 GetGlobalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<GlobalPositionMsg>
-  port: /fmu/out/vehicle_global_position
+  description: "Gets the current position of the vehicle in the global coordinate frame"
+  topic: /fmu/out/vehicle_global_position
 
 GetLocalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<LocalPositionMsg>
-  port: /fmu/out/vehicle_local_position
+  description: "Gets the current position of the vehicle in the local coordinate frame"
+  topic: /fmu/out/vehicle_local_position
