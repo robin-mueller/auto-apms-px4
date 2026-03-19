@@ -1,6 +1,6 @@
 <p align="center">
   <img width="30%" src="https://github.com/PX4/PX4-graphics/blob/master/PX4_Logo_Black_RGB.png?raw=true">
-  <img width="50%" src="https://autoapms.github.io/auto-apms-guide/logo/logo.png">
+  <img width="50%" src="https://autoapms.github.io/auto-apms-guide/logo/autoapms_logo.svg">
 </p>
 <div align="center">
 
