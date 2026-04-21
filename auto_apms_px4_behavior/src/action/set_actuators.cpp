@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "auto_apms_behavior_tree_core/node.hpp"
 #include "auto_apms_px4_interfaces/action/set_actuators.hpp"
+
+#include "auto_apms_behavior_tree_core/node.hpp"
 
 #define INPUT_KEY_MOTOR_COMMANDS "motor_commands"
 #define INPUT_KEY_SERVO_COMMANDS "servo_commands"

@@ -15,9 +15,8 @@
 #include <limits>
 
 #include "auto_apms_px4/mode.hpp"
-
-#include "auto_apms_px4_interfaces/action/set_actuators.hpp"
 #include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4_interfaces/action/set_actuators.hpp"
 #include "px4_ros2/control/setpoint_types/direct_actuators.hpp"
 
 namespace auto_apms_px4
@@ -68,8 +67,8 @@ private:
     }
 
     const rclcpp::Duration elapsed = node().get_clock()->now() - activation_time_;
-    const rclcpp::Duration hold_duration = rclcpp::Duration::from_nanoseconds(
-      static_cast<int64_t>(goal_ptr->hold_period_ms) * 1'000'000LL);
+    const rclcpp::Duration hold_duration =
+      rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(goal_ptr->hold_period_ms) * 1'000'000LL);
 
     if (!commands_sent_ || elapsed < hold_duration) {
       // First call or still within hold period: send the requested commands
@@ -98,5 +97,3 @@ public:
 
 #include "rclcpp_components/register_node_macro.hpp"
 RCLCPP_COMPONENTS_REGISTER_NODE(auto_apms_px4::SetActuatorsSkill)
-
-
