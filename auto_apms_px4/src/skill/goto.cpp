@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      https://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "px4_ros2/control/setpoint_types/goto.hpp"
+#include "px4_ros2/control/setpoint_types/multicopter/goto.hpp"
 
 #include <Eigen/Core>
 
@@ -28,7 +28,7 @@ using GoToActionType = auto_apms_px4_interfaces::action::GoTo;
 
 class GoToGlobalMode : public PositionAwareMode<GoToActionType>
 {
-  std::shared_ptr<px4_ros2::GotoGlobalSetpointType> goto_global_setpoint_ptr_;
+  std::shared_ptr<px4_ros2::MulticopterGotoGlobalSetpointType> goto_global_setpoint_ptr_;
   Eigen::Vector3d position_target_f_glob_;
   float heading_target_rad_;
 
@@ -38,7 +38,7 @@ public:
     std::shared_ptr<ActionContextType> action_context_ptr)
   : PositionAwareMode{node, settings, topic_namespace_prefix, action_context_ptr}
   {
-    goto_global_setpoint_ptr_ = std::make_shared<px4_ros2::GotoGlobalSetpointType>(*this);
+    goto_global_setpoint_ptr_ = std::make_shared<px4_ros2::MulticopterGotoGlobalSetpointType>(*this);
   }
 
 private:
@@ -104,7 +104,7 @@ private:
 
 class GoToLocalMode : public PositionAwareMode<GoToActionType>
 {
-  std::shared_ptr<px4_ros2::GotoSetpointType> goto_local_setpoint_ptr_;
+  std::shared_ptr<px4_ros2::MulticopterGotoSetpointType> goto_local_setpoint_ptr_;
   Eigen::Vector3d position_target_f_ned_;
   float heading_target_rad_;
 
@@ -114,7 +114,7 @@ public:
     std::shared_ptr<ActionContextType> action_context_ptr)
   : PositionAwareMode{node, settings, topic_namespace_prefix, action_context_ptr}
   {
-    goto_local_setpoint_ptr_ = std::make_shared<px4_ros2::GotoSetpointType>(*this);
+    goto_local_setpoint_ptr_ = std::make_shared<px4_ros2::MulticopterGotoSetpointType>(*this);
   }
 
 private:

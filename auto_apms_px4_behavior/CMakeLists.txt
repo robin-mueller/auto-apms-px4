@@ -36,6 +36,7 @@ add_library(behavior_tree_nodes SHARED
     "src/action/rtl.cpp"
     "src/action/takeoff.cpp"
     "src/sub/get_position.cpp"
+    "src/action/set_actuators.cpp"
 )
 ament_target_dependencies(behavior_tree_nodes
     auto_apms_behavior_tree_core
@@ -51,6 +52,7 @@ auto_apms_behavior_tree_register_nodes(behavior_tree_nodes
     "${PROJECT_NAME}::LandAction"
     "${PROJECT_NAME}::MissionAction"
     "${PROJECT_NAME}::RTLAction"
+    "${PROJECT_NAME}::SetActuatorsAction"
     "${PROJECT_NAME}::TakeoffAction"
     "${PROJECT_NAME}::GetPosition<GlobalPositionMsg>"
     "${PROJECT_NAME}::GetPosition<LocalPositionMsg>"
@@ -96,5 +98,14 @@ install(
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
+
+#
+# ------------ Testing --------------
+#
+
+if(BUILD_TESTING)
+    find_package(ament_cmake_copyright REQUIRED)
+    ament_copyright()
+endif()
 
 ament_package()

@@ -61,3 +61,8 @@ GetLocalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<LocalPositionMsg>
   description: "Gets the current position of the vehicle in the local coordinate frame"
   topic: /fmu/out/vehicle_local_position
+
+SetActuators:
+  class_name: ${PROJECT_NAME}::SetActuatorsAction
+  description: "Sends direct actuator commands (motors and/or servos) to the vehicle"
+  topic: set_actuators

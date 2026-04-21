@@ -24,6 +24,7 @@ set(_AUTO_APMS_PX4__LAND_ACTION_NAME "land")
 set(_AUTO_APMS_PX4__RTL_ACTION_NAME "rtl")
 set(_AUTO_APMS_PX4__TAKEOFF_ACTION_NAME "takeoff")
 set(_AUTO_APMS_PX4__MISSION_ACTION_NAME "mission")
+set(_AUTO_APMS_PX4__SET_ACTUATORS_ACTION_NAME "set_actuators")
 
 #
 # ------------ Library --------------
@@ -58,6 +59,7 @@ add_library(px4_skills SHARED
     "src/skill/takeoff.cpp"
     "src/skill/rtl.cpp"
     "src/skill/mission.cpp"
+    "src/skill/direct_actuators_control.cpp"
 )
 target_link_libraries(px4_skills PUBLIC
     ${PROJECT_NAME}
@@ -75,6 +77,7 @@ target_compile_definitions(px4_skills PRIVATE
     _AUTO_APMS_PX4__RTL_ACTION_NAME="${_AUTO_APMS_PX4__RTL_ACTION_NAME}"
     _AUTO_APMS_PX4__TAKEOFF_ACTION_NAME="${_AUTO_APMS_PX4__TAKEOFF_ACTION_NAME}"
     _AUTO_APMS_PX4__MISSION_ACTION_NAME="${_AUTO_APMS_PX4__MISSION_ACTION_NAME}"
+    _AUTO_APMS_PX4__SET_ACTUATORS_ACTION_NAME="${_AUTO_APMS_PX4__SET_ACTUATORS_ACTION_NAME}"
 )
 
 rclcpp_components_register_nodes(px4_skills
@@ -86,6 +89,7 @@ rclcpp_components_register_nodes(px4_skills
     "auto_apms_px4::TakeoffSkill"
     "auto_apms_px4::RTLSkill"
     "auto_apms_px4::MissionSkill"
+    "auto_apms_px4::SetActuatorsSkill"
 )
 
 #
@@ -147,5 +151,14 @@ install(
     DIRECTORY "launch"
     DESTINATION "share/${PROJECT_NAME}"
 )
+
+#
+# ------------ Testing --------------
+#
+
+if(BUILD_TESTING)
+    find_package(ament_cmake_copyright REQUIRED)
+    ament_copyright()
+endif()
 
 ament_package()

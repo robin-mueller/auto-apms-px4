@@ -17,6 +17,8 @@
   <depend>px4_msgs</depend>
   <depend>auto_apms_px4_interfaces</depend>
 
+  <test_depend>ament_cmake_copyright</test_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>

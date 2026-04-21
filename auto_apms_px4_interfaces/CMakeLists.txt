@@ -21,6 +21,7 @@ set(ACTION_SOURCES
     "action/RTL.action"
     "action/Takeoff.action"
     "action/Mission.action"
+    "action/SetActuators.action"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

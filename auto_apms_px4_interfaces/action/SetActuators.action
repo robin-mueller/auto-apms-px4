@@ -1,0 +1,8 @@
+# Request
+float32[] motor_commands # range: [-1, 1], where 1 means maximum positive thrust, -1 maximum negative (if not supported by the output, <0 maps to NaN), and NaN maps to disarmed (stop the motors)
+float32[] servo_commands # range: [-1, 1], where 1 means maximum positive position, -1 maximum negative and NaN maps to disarmed
+uint32 hold_period_ms 0 # hold the current motor/servo commands for this duration (in milliseconds) before stopping the actuators (setting the commands to NaN). If 0, the commands are sent once and then set to NaN immediately.
+---
+# Result
+---
+# Feedback
