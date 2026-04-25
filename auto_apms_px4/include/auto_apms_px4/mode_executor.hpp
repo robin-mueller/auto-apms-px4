@@ -165,8 +165,7 @@ class ModeExecutorFactory
 {
 public:
   ModeExecutorFactory(
-    const std::string & action_name, const rclcpp::NodeOptions & options,
-    const std::string & topic_namespace_prefix = "", bool deactivate_before_completion = true);
+    const std::string & action_name, const rclcpp::NodeOptions & options, bool deactivate_before_completion = true);
 
   rclcpp::node_interfaces::NodeBaseInterface::SharedPtr get_node_base_interface();
 
@@ -216,12 +215,12 @@ template <class ActionT>
 void ModeExecutor<ActionT>::setUp()
 {
   vehicle_status_sub_ptr_ = this->node_ptr_->template create_subscription<px4_msgs::msg::VehicleStatus>(
-    "/fmu/out/vehicle_status" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleStatus>(),
+    "fmu/out/vehicle_status" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleStatus>(),
     rclcpp::QoS(1).best_effort(),
     [this](px4_msgs::msg::VehicleStatus::UniquePtr msg) { last_vehicle_status_ptr_ = std::move(msg); });
 
   mode_completed_sub_ptr_ = this->node_ptr_->template create_subscription<px4_msgs::msg::ModeCompleted>(
-    "/fmu/out/mode_completed" + px4_ros2::getMessageNameVersion<px4_msgs::msg::ModeCompleted>(),
+    "fmu/out/mode_completed" + px4_ros2::getMessageNameVersion<px4_msgs::msg::ModeCompleted>(),
     rclcpp::QoS(1).best_effort(), [this](px4_msgs::msg::ModeCompleted::UniquePtr msg) {
       if (msg->nav_state == mode_id_) {
         if (msg->result == px4_msgs::msg::ModeCompleted::RESULT_SUCCESS) {
@@ -417,8 +416,7 @@ uint8_t ModeExecutor<ActionT>::getModeID() const
 
 template <class ActionT, class ModeT>
 ModeExecutorFactory<ActionT, ModeT>::ModeExecutorFactory(
-  const std::string & action_name, const rclcpp::NodeOptions & options, const std::string & topic_namespace_prefix,
-  bool deactivate_before_completion)
+  const std::string & action_name, const rclcpp::NodeOptions & options, bool deactivate_before_completion)
 : node_ptr_(std::make_shared<rclcpp::Node>(action_name + "_node", options))
 {
   static_assert(
@@ -428,8 +426,7 @@ ModeExecutorFactory<ActionT, ModeT>::ModeExecutorFactory(
 
   const auto action_context_ptr = std::make_shared<auto_apms_util::ActionContext<ActionT>>(node_ptr_->get_logger());
 
-  mode_ptr_ = std::make_unique<ModeT>(
-    *node_ptr_, px4_ros2::ModeBase::Settings(action_name), topic_namespace_prefix, action_context_ptr);
+  mode_ptr_ = std::make_unique<ModeT>(*node_ptr_, px4_ros2::ModeBase::Settings(action_name), action_context_ptr);
 
   constexpr int max_retries = 5;
   bool fmu_available = false;

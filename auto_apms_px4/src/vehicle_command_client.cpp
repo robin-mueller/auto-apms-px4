@@ -40,10 +40,10 @@ VehicleCommandClient::VehicleCommandClient(rclcpp::Node & node, const std::chron
 {
   // Create vehicle command publisher and acknowledgement signal subscriber
   vehicle_command_pub_ = node_.create_publisher<px4_msgs::msg::VehicleCommand>(
-    "/fmu/in/vehicle_command" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleCommand>(), 10);
+    "fmu/in/vehicle_command" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleCommand>(), 10);
 
   vehicle_command_ack_sub_ = node_.create_subscription<px4_msgs::msg::VehicleCommandAck>(
-    "/fmu/out/vehicle_command_ack" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleCommandAck>(),
+    "fmu/out/vehicle_command_ack" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleCommandAck>(),
     rclcpp::QoS(1).best_effort(), [](px4_msgs::msg::VehicleCommandAck::UniquePtr msg) { (void)msg; });
 }
 

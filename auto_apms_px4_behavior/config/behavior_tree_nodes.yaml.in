@@ -55,12 +55,12 @@ Takeoff:
 GetGlobalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<GlobalPositionMsg>
   description: "Gets the current position of the vehicle in the global coordinate frame"
-  topic: /fmu/out/vehicle_global_position
+  topic: fmu/out/vehicle_global_position
 
 GetLocalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<LocalPositionMsg>
   description: "Gets the current position of the vehicle in the local coordinate frame"
-  topic: /fmu/out/vehicle_local_position
+  topic: fmu/out/vehicle_local_position_v1
 
 SetActuators:
   class_name: ${PROJECT_NAME}::SetActuatorsAction

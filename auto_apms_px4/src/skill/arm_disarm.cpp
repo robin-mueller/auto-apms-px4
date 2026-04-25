@@ -44,7 +44,7 @@ public:
   : ActionWrapper{_AUTO_APMS_PX4__ARM_DISARM_ACTION_NAME, options}, vehicle_command_client_{*this->node_ptr_}
   {
     vehicle_status_sub_ptr_ = this->node_ptr_->create_subscription<px4_msgs::msg::VehicleStatus>(
-      "/fmu/out/vehicle_status" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleStatus>(),
+      "fmu/out/vehicle_status" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleStatus>(),
       rclcpp::QoS(1).best_effort(), [this](px4_msgs::msg::VehicleStatus::UniquePtr msg) {
         is_armed_ = msg->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED;
         ready_to_arm_ = msg->pre_flight_checks_pass;

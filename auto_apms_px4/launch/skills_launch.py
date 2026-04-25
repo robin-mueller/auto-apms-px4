@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 
@@ -24,24 +26,34 @@ ALL_SKILL_NAMES = [
     "auto_apms_px4::LandSkill",
     "auto_apms_px4::TakeoffSkill",
     "auto_apms_px4::RTLSkill",
-    "auto_apms_px4::MissionSkill",
+    # "auto_apms_px4::MissionSkill",
+    "auto_apms_px4::SetActuatorsSkill",
 ]
 
 
 def generate_launch_description():
+    ns_arg = DeclareLaunchArgument(
+        "namespace",
+        default_value="",
+        description="Namespace for the nodes",
+    )
+    namespace = LaunchConfiguration("namespace")
+
     return LaunchDescription(
         [
+            ns_arg,
             ComposableNodeContainer(
-                name="skill_container_node",
-                namespace="",
+                name="skill_container",
+                namespace=namespace,
                 exec_name="skill_container",
                 package="rclcpp_components",
                 executable="component_container",
                 composable_node_descriptions=[
-                    ComposableNode(package="auto_apms_px4", plugin=name) for name in ALL_SKILL_NAMES
+                    ComposableNode(package="auto_apms_px4", plugin=name, namespace=namespace)
+                    for name in ALL_SKILL_NAMES
                 ],
                 output="screen",
                 emulate_tty=True,
-            )
+            ),
         ]
     )

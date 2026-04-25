@@ -32,9 +32,8 @@ class SetActuatorsMode : public ModeBase<SetActuatorsActionType>
 
 public:
   SetActuatorsMode(
-    rclcpp::Node & node, const px4_ros2::ModeBase::Settings & settings, const std::string & topic_namespace_prefix,
-    std::shared_ptr<ActionContextType> action_context_ptr)
-  : ModeBase{node, settings, topic_namespace_prefix, action_context_ptr}
+    rclcpp::Node & node, px4_ros2::ModeBase::Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
+  : ModeBase{node, settings, action_context_ptr}
   {
     actuator_setpoint_ptr_ = std::make_shared<px4_ros2::DirectActuatorsSetpointType>(*this);
   }

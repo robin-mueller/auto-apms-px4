@@ -34,9 +34,9 @@ class GoToGlobalMode : public PositionAwareMode<GoToActionType>
 
 public:
   GoToGlobalMode(
-    rclcpp::Node & node, const px4_ros2::ModeBase::Settings & settings, const std::string & topic_namespace_prefix,
+    rclcpp::Node & node, const px4_ros2::ModeBase::Settings & settings,
     std::shared_ptr<ActionContextType> action_context_ptr)
-  : PositionAwareMode{node, settings, topic_namespace_prefix, action_context_ptr}
+  : PositionAwareMode{node, settings, action_context_ptr}
   {
     goto_global_setpoint_ptr_ = std::make_shared<px4_ros2::MulticopterGotoGlobalSetpointType>(*this);
   }
@@ -110,9 +110,9 @@ class GoToLocalMode : public PositionAwareMode<GoToActionType>
 
 public:
   GoToLocalMode(
-    rclcpp::Node & node, const px4_ros2::ModeBase::Settings & settings, const std::string & topic_namespace_prefix,
+    rclcpp::Node & node, const px4_ros2::ModeBase::Settings & settings,
     std::shared_ptr<ActionContextType> action_context_ptr)
-  : PositionAwareMode{node, settings, topic_namespace_prefix, action_context_ptr}
+  : PositionAwareMode{node, settings, action_context_ptr}
   {
     goto_local_setpoint_ptr_ = std::make_shared<px4_ros2::MulticopterGotoSetpointType>(*this);
   }

@@ -46,10 +46,8 @@ protected:
   using Result = typename ActionContextType::Result;
   using Feedback = typename ActionContextType::Feedback;
 
-  ModeBase(
-    rclcpp::Node & node, const Settings & settings, const std::string & topic_namespace_prefix,
-    std::shared_ptr<ActionContextType> action_context_ptr)
-  : px4_ros2::ModeBase{node, settings, topic_namespace_prefix}, action_context_ptr_{action_context_ptr}
+  ModeBase(rclcpp::Node & node, Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
+  : px4_ros2::ModeBase{node, settings}, action_context_ptr_{action_context_ptr}
   {
   }
 
@@ -93,9 +91,8 @@ protected:
   using typename ModeBase<ActionT>::ActionContextType;
 
   PositionAwareMode(
-    rclcpp::Node & node, const px4_ros2::ModeBase::Settings & settings, const std::string & topic_namespace_prefix,
-    std::shared_ptr<ActionContextType> action_context_ptr)
-  : ModeBase<ActionT>{node, settings, topic_namespace_prefix, action_context_ptr}
+    rclcpp::Node & node, px4_ros2::ModeBase::Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
+  : ModeBase<ActionT>{node, settings, action_context_ptr}
   {
     vehicle_global_position_ptr_ = std::make_shared<px4_ros2::OdometryGlobalPosition>(*this);
     vehicle_local_position_ptr_ = std::make_shared<px4_ros2::OdometryLocalPosition>(*this);
