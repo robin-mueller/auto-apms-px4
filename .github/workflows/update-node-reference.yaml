@@ -29,7 +29,7 @@ jobs:
         with:
           import-token: ${{ secrets.GITHUB_TOKEN }}
           target-ros2-distro: jazzy
-          vcs-repo-file-url: ${GITHUB_WORKSPACE}/dependencies.repos
+          vcs-repo-file-url: ${GITHUB_WORKSPACE}/update_node_reference_deps.repos
           package-name: auto_apms_px4_behavior
           coverage-result: false
           colcon-defaults: |
