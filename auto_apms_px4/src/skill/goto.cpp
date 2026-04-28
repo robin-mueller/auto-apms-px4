@@ -42,7 +42,7 @@ public:
   }
 
 private:
-  void OnActivateWithGoal(std::shared_ptr<const Goal> goal_ptr) final
+  void onActivateWithGoal(std::shared_ptr<const Goal> goal_ptr) final
   {
     position_target_f_glob_ = Eigen::Vector3d(goal_ptr->pos.x, goal_ptr->pos.y, goal_ptr->pos.z);
 
@@ -68,7 +68,7 @@ private:
       double_to_string(position_target_f_glob_.z(), 2).c_str(), px4_ros2::radToDeg(heading_target_rad_));
   }
 
-  void UpdateSetpointWithGoal(
+  void updateSetpointWithGoal(
     float /*dt_s*/, std::shared_ptr<const Goal> goal_ptr, std::shared_ptr<Feedback> feedback_ptr,
     std::shared_ptr<Result> result_ptr) final
   {
@@ -92,9 +92,9 @@ private:
       (vehicle_local_position_ptr_->velocityNed().cast<double>().dot(distance_f_ned.normalized()));
 
     if (
-      IsGlobalPositionReached(
+      isGlobalPositionReached(
         position_target_f_glob_, goal_ptr->reached_thresh_pos_m, goal_ptr->reached_thresh_vel_m_s) &&
-      IsHeadingReached(heading_target_rad_, px4_ros2::degToRad(goal_ptr->reached_thresh_heading_deg))) {
+      isHeadingReached(heading_target_rad_, px4_ros2::degToRad(goal_ptr->reached_thresh_heading_deg))) {
       result_ptr->remaining_dist = feedback_ptr->remaining_dist;
       result_ptr->remaining_heading_deg = feedback_ptr->remaining_heading_deg;
       completed(px4_ros2::Result::Success);
@@ -118,7 +118,7 @@ public:
   }
 
 private:
-  void OnActivateWithGoal(std::shared_ptr<const Goal> goal_ptr) final
+  void onActivateWithGoal(std::shared_ptr<const Goal> goal_ptr) final
   {
     position_target_f_ned_ = Eigen::Vector3d(goal_ptr->pos.x, goal_ptr->pos.y, goal_ptr->pos.z);
 
@@ -145,7 +145,7 @@ private:
       double_to_string(position_target_f_ned_.z(), 2).c_str(), px4_ros2::radToDeg(heading_target_rad_));
   }
 
-  void UpdateSetpointWithGoal(
+  void updateSetpointWithGoal(
     float /*dt_s*/, std::shared_ptr<const Goal> goal_ptr, std::shared_ptr<Feedback> feedback_ptr,
     std::shared_ptr<Result> result_ptr) final
   {
@@ -168,9 +168,9 @@ private:
       (vehicle_local_position_ptr_->velocityNed().cast<double>().dot(distance_f_ned.normalized()));
 
     if (
-      IsLocalPositionReached(
+      isLocalPositionReached(
         position_target_f_ned_, goal_ptr->reached_thresh_pos_m, goal_ptr->reached_thresh_vel_m_s) &&
-      IsHeadingReached(heading_target_rad_, px4_ros2::degToRad(goal_ptr->reached_thresh_heading_deg))) {
+      isHeadingReached(heading_target_rad_, px4_ros2::degToRad(goal_ptr->reached_thresh_heading_deg))) {
       result_ptr->remaining_dist = feedback_ptr->remaining_dist;
       result_ptr->remaining_heading_deg = feedback_ptr->remaining_heading_deg;
       completed(px4_ros2::Result::Success);

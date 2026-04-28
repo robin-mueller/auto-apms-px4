@@ -28,7 +28,6 @@ class SetActuatorsMode : public ModeBase<SetActuatorsActionType>
 {
   std::shared_ptr<px4_ros2::DirectActuatorsSetpointType> actuator_setpoint_ptr_;
   rclcpp::Time activation_time_;
-  bool commands_sent_{false};
 
 public:
   SetActuatorsMode(
@@ -39,13 +38,31 @@ public:
   }
 
 private:
-  void OnActivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/) final
+  void onActivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/) final
   {
     activation_time_ = node().get_clock()->now();
-    commands_sent_ = false;
   }
 
-  void UpdateSetpointWithGoal(
+  void stopActuators()
+  {
+    constexpr auto kNaN = std::numeric_limits<float>::quiet_NaN();
+    constexpr int kMaxMotors = px4_ros2::DirectActuatorsSetpointType::kMaxNumMotors;
+    constexpr int kMaxServos = px4_ros2::DirectActuatorsSetpointType::kMaxNumServos;
+    actuator_setpoint_ptr_->updateMotors(Eigen::Matrix<float, kMaxMotors, 1>::Constant(kNaN));
+    actuator_setpoint_ptr_->updateServos(Eigen::Matrix<float, kMaxServos, 1>::Constant(kNaN));
+  }
+
+  void onDeactivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/) final { stopActuators(); }
+
+  void updateSetpointOnCancel(
+    float /*dt_s*/, std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Feedback> /*feedback_ptr*/,
+    std::shared_ptr<Result> /*result_ptr*/) final
+  {
+    stopActuators();
+    completed(px4_ros2::Result::Success);
+  }
+
+  void updateSetpointWithGoal(
     float /*dt_s*/, std::shared_ptr<const Goal> goal_ptr, std::shared_ptr<Feedback> /*feedback_ptr*/,
     std::shared_ptr<Result> /*result_ptr*/) final
   {
@@ -69,15 +86,13 @@ private:
     const rclcpp::Duration hold_duration =
       rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(goal_ptr->hold_period_ms) * 1'000'000LL);
 
-    if (!commands_sent_ || elapsed < hold_duration) {
+    if (elapsed < hold_duration) {
       // First call or still within hold period: send the requested commands
       actuator_setpoint_ptr_->updateMotors(motor_cmds);
       actuator_setpoint_ptr_->updateServos(servo_cmds);
-      commands_sent_ = true;
     } else {
       // Hold period elapsed: stop all actuators and signal completion
-      actuator_setpoint_ptr_->updateMotors(Eigen::Matrix<float, kMaxMotors, 1>::Constant(kNaN));
-      actuator_setpoint_ptr_->updateServos(Eigen::Matrix<float, kMaxServos, 1>::Constant(kNaN));
+      stopActuators();
       completed(px4_ros2::Result::Success);
     }
   }
@@ -87,7 +102,8 @@ class SetActuatorsSkill : public ModeExecutorFactory<SetActuatorsActionType, Set
 {
 public:
   explicit SetActuatorsSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutorFactory{_AUTO_APMS_PX4__SET_ACTUATORS_ACTION_NAME, options}
+  : ModeExecutorFactory{
+      _AUTO_APMS_PX4__SET_ACTUATORS_ACTION_NAME, options, VehicleCommandClient::FlightMode::Unset, true}
   {
   }
 };

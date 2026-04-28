@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "auto_apms_px4/mode.hpp"
 #include "auto_apms_px4/vehicle_command_client.hpp"
 #include "auto_apms_util/action_wrapper.hpp"
@@ -112,13 +114,14 @@ public:
 
   explicit ModeExecutor(
     const std::string & action_name, rclcpp::Node::SharedPtr node_ptr,
-    std::shared_ptr<ActionContextType> action_context_ptr, uint8_t mode_id, bool deactivate_before_completion = true);
+    std::shared_ptr<ActionContextType> action_context_ptr, uint8_t mode_id,
+    FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
   explicit ModeExecutor(
     const std::string & action_name, const rclcpp::NodeOptions & options, uint8_t mode_id,
-    bool deactivate_before_completion = true);
+    FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
   explicit ModeExecutor(
     const std::string & action_name, const rclcpp::NodeOptions & options, FlightMode flight_mode,
-    bool deactivate_before_completion = true);
+    FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
 
 private:
   void setUp();
@@ -142,11 +145,12 @@ protected:
 private:
   const VehicleCommandClient vehicle_command_client_;
   const uint8_t mode_id_;
-  bool deactivate_before_completion_;
+  FlightMode deactivation_flight_mode_;
+  bool disarm_after_completion_;
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_ptr_;
   rclcpp::Subscription<px4_msgs::msg::ModeCompleted>::SharedPtr mode_completed_sub_ptr_;
   px4_msgs::msg::VehicleStatus::SharedPtr last_vehicle_status_ptr_;
-  bool mode_completed_{false};
+  std::optional<uint8_t> mode_completed_result_;
   bool deactivation_command_sent_{false};
   State state_{State::REQUEST_ACTIVATION};
   rclcpp::Time activation_command_sent_time_;
@@ -165,7 +169,9 @@ class ModeExecutorFactory
 {
 public:
   ModeExecutorFactory(
-    const std::string & action_name, const rclcpp::NodeOptions & options, bool deactivate_before_completion = true);
+    const std::string & action_name, const rclcpp::NodeOptions & options,
+    VehicleCommandClient::FlightMode deactivation_flight_mode = VehicleCommandClient::FlightMode::Hold,
+    bool disarm_after_completion = false);
 
   rclcpp::node_interfaces::NodeBaseInterface::SharedPtr get_node_base_interface();
 
@@ -182,11 +188,13 @@ private:
 template <class ActionT>
 ModeExecutor<ActionT>::ModeExecutor(
   const std::string & action_name, rclcpp::Node::SharedPtr node_ptr,
-  std::shared_ptr<ActionContextType> action_context_ptr, uint8_t mode_id, bool deactivate_before_completion)
+  std::shared_ptr<ActionContextType> action_context_ptr, uint8_t mode_id, FlightMode deactivation_flight_mode,
+  bool disarm_after_completion)
 : auto_apms_util::ActionWrapper<ActionT>(action_name, node_ptr, action_context_ptr),
   vehicle_command_client_(*node_ptr),
   mode_id_(mode_id),
-  deactivate_before_completion_(deactivate_before_completion)
+  deactivation_flight_mode_(deactivation_flight_mode),
+  disarm_after_completion_(disarm_after_completion)
 {
   setUp();
 }
@@ -194,11 +202,12 @@ ModeExecutor<ActionT>::ModeExecutor(
 template <class ActionT>
 ModeExecutor<ActionT>::ModeExecutor(
   const std::string & action_name, const rclcpp::NodeOptions & options, uint8_t mode_id,
-  bool deactivate_before_completion)
+  FlightMode deactivation_flight_mode, bool disarm_after_completion)
 : auto_apms_util::ActionWrapper<ActionT>(action_name, options),
   vehicle_command_client_(*this->node_ptr_),
   mode_id_(mode_id),
-  deactivate_before_completion_(deactivate_before_completion)
+  deactivation_flight_mode_(deactivation_flight_mode),
+  disarm_after_completion_(disarm_after_completion)
 {
   setUp();
 }
@@ -206,8 +215,9 @@ ModeExecutor<ActionT>::ModeExecutor(
 template <class ActionT>
 ModeExecutor<ActionT>::ModeExecutor(
   const std::string & action_name, const rclcpp::NodeOptions & options, FlightMode flight_mode,
-  bool deactivate_before_completion)
-: ModeExecutor<ActionT>(action_name, options, static_cast<uint8_t>(flight_mode), deactivate_before_completion)
+  FlightMode deactivation_flight_mode, bool disarm_after_completion)
+: ModeExecutor<ActionT>(
+    action_name, options, static_cast<uint8_t>(flight_mode), deactivation_flight_mode, disarm_after_completion)
 {
 }
 
@@ -222,14 +232,14 @@ void ModeExecutor<ActionT>::setUp()
   mode_completed_sub_ptr_ = this->node_ptr_->template create_subscription<px4_msgs::msg::ModeCompleted>(
     "fmu/out/mode_completed" + px4_ros2::getMessageNameVersion<px4_msgs::msg::ModeCompleted>(),
     rclcpp::QoS(1).best_effort(), [this](px4_msgs::msg::ModeCompleted::UniquePtr msg) {
-      if (msg->nav_state == mode_id_) {
-        if (msg->result == px4_msgs::msg::ModeCompleted::RESULT_SUCCESS) {
-          this->mode_completed_ = true;
-        } else {
-          RCLCPP_ERROR(this->node_ptr_->get_logger(), "Flight mode %i failed to execute. Aborting...", this->mode_id_);
-          this->action_context_ptr_->abort();
-        }
-        return;
+      bool is_relevant = msg->nav_state == this->mode_id_;
+      RCLCPP_DEBUG(
+        this->node_ptr_->get_logger(),
+        "Flight mode completion signal received by mode %i. Signal was: timestamp=%li, mode_id=%i, result=%i (is "
+        "relevant for this mode: %i)",
+        this->mode_id_, msg->timestamp, msg->nav_state, msg->result, is_relevant);
+      if (is_relevant) {
+        this->mode_completed_result_ = msg->result;
       }
     });
 }
@@ -237,12 +247,12 @@ void ModeExecutor<ActionT>::setUp()
 template <class ActionT>
 auto_apms_util::ActionStatus ModeExecutor<ActionT>::asyncDeactivateFlightMode()
 {
-  // If currently waiting for flight mode activation and HOLD is active we need to wait for the nav state to change
-  // before starting deactivation. Otherwise, we'll misinterpret the current nav state when in
-  // WAIT_FOR_HOLDING_STATE_REACHED and return success immediately
-  bool is_holding = isCurrentNavState(static_cast<uint8_t>(FlightMode::Hold));
+  // If currently waiting for flight mode activation and the deactivation mode is already active, we need to wait for
+  // the nav state to change before starting deactivation. Otherwise, we'll misinterpret the current nav state and
+  // return success immediately.
+  bool is_deactivation_mode_active = isCurrentNavState(static_cast<uint8_t>(deactivation_flight_mode_));
   if (state_ == State::WAIT_FOR_ACTIVATION) {
-    if (is_holding) {
+    if (is_deactivation_mode_active) {
       auto & clock = *this->node_ptr_->get_clock();
       RCLCPP_DEBUG_THROTTLE(
         this->node_ptr_->get_logger(), clock, 250, "Waiting for flight mode %i to become active before deactivating...",
@@ -253,14 +263,18 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::asyncDeactivateFlightMode()
     }
   }
 
-  if (is_holding) {
-    RCLCPP_DEBUG(this->node_ptr_->get_logger(), "Deactivated flight mode successfully (HOLD is active)");
+  if (is_deactivation_mode_active) {
+    RCLCPP_DEBUG(
+      this->node_ptr_->get_logger(), "Deactivated flight mode successfully (deactivation mode %i is active)",
+      static_cast<int>(deactivation_flight_mode_));
     return ActionStatus::SUCCESS;
   } else {
-    // Only send command if not in HOLD already
+    // Only send command if not in deactivation mode already
     if (!deactivation_command_sent_) {
-      if (!vehicle_command_client_.syncActivateFlightMode(FlightMode::Hold)) {
-        RCLCPP_ERROR(this->node_ptr_->get_logger(), "Failed to send command to activate HOLD");
+      if (!vehicle_command_client_.syncActivateFlightMode(deactivation_flight_mode_)) {
+        RCLCPP_ERROR(
+          this->node_ptr_->get_logger(), "Failed to send command to activate deactivation flight mode %i",
+          static_cast<int>(deactivation_flight_mode_));
         return ActionStatus::FAILURE;
       }
       // Force to consider only new status messages after sending new command
@@ -277,7 +291,7 @@ bool ModeExecutor<ActionT>::onGoalRequest(const std::shared_ptr<const Goal> /*go
 {
   state_ = State::REQUEST_ACTIVATION;
   deactivation_command_sent_ = false;
-  mode_completed_ = false;
+  mode_completed_result_ = std::nullopt;
   activation_timeout_ = rclcpp::Duration::from_seconds(fmin(this->param_listener_.get_params().loop_rate * 15, 1.5));
   return true;
 }
@@ -286,13 +300,7 @@ template <class ActionT>
 bool ModeExecutor<ActionT>::onCancelRequest(
   std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Result> /*result_ptr*/)
 {
-  if (deactivate_before_completion_) {
-    // To deactivate current flight mode, enable HOLD mode.
-    RCLCPP_DEBUG(
-      this->node_ptr_->get_logger(), "Cancellation requested! Will deactivate before termination (Enter HOLD)...");
-  } else {
-    RCLCPP_DEBUG(this->node_ptr_->get_logger(), "Cancellation requested!");
-  }
+  RCLCPP_INFO(this->node_ptr_->get_logger(), "Cancellation requested!");
   return true;
 }
 
@@ -300,10 +308,35 @@ template <class ActionT>
 auto_apms_util::ActionStatus ModeExecutor<ActionT>::cancelGoal(
   std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Result> /*result_ptr*/)
 {
-  if (deactivate_before_completion_) {
-    return asyncDeactivateFlightMode();
+  // The custom mode is responsible for managing the lifecycle of the cancellation via the onGoalCanceled callback.
+  // Wait until the mode signals completion (by calling completed()) or PX4 deactivates it externally.
+  if (state_ != State::COMPLETE) {
+    // During cancellation, we bypass the custom isCompleted method
+    if (mode_completed_result_.has_value()) {
+      state_ = State::COMPLETE;
+    } else {
+      if (!isCurrentNavState(mode_id_)) {
+        RCLCPP_WARN(
+          this->node_ptr_->get_logger(), "Flight mode %i was deactivated externally during cancellation", mode_id_);
+        // In this case we don't have to do anything afterwards
+        return ActionStatus::SUCCESS;
+      }
+      return ActionStatus::RUNNING;
+    }
   }
-  return ActionStatus::SUCCESS;
+
+  ActionStatus ret = ActionStatus::SUCCESS;
+  if (deactivation_flight_mode_ != FlightMode::Unset) {
+    ret = asyncDeactivateFlightMode();
+  }
+
+  if (ret != ActionStatus::RUNNING) {
+    if (disarm_after_completion_ && !vehicle_command_client_.disarm()) {
+      RCLCPP_WARN(this->node_ptr_->get_logger(), "Failed to disarm after flight mode %i cancellation", mode_id_);
+    }
+    RCLCPP_INFO(this->node_ptr_->get_logger(), "Flight mode %i cancellation complete", mode_id_);
+  }
+  return ret;
 }
 
 template <class ActionT>
@@ -349,11 +382,11 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::executeGoal(
       // Check if execution should be terminated
       if (isCompleted(goal_ptr, *last_vehicle_status_ptr_)) {
         state_ = State::COMPLETE;
-        if (deactivate_before_completion_) {
-          // To deactivate current flight mode, enable HOLD mode
+        if (deactivation_flight_mode_ != FlightMode::Unset) {
           RCLCPP_DEBUG(
             this->node_ptr_->get_logger(),
-            "Flight mode %i complete! Will deactivate before termination (Enter HOLD)...", mode_id_);
+            "Flight mode %i complete! Will deactivate before termination (switching to flight mode %i)...", mode_id_,
+            static_cast<int>(deactivation_flight_mode_));
         } else {
           RCLCPP_DEBUG(
             this->node_ptr_->get_logger(),
@@ -375,7 +408,7 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::executeGoal(
       break;
   }
 
-  if (deactivate_before_completion_) {
+  if (deactivation_flight_mode_ != FlightMode::Unset) {
     const auto deactivation_state = asyncDeactivateFlightMode();
     if (deactivation_state != ActionStatus::SUCCESS) {
       return deactivation_state;
@@ -383,7 +416,10 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::executeGoal(
     // Don't return to complete in same iteration
   }
 
-  RCLCPP_DEBUG(this->node_ptr_->get_logger(), "Flight mode %i execution termination", mode_id_);
+  RCLCPP_INFO(this->node_ptr_->get_logger(), "Flight mode %i execution complete", mode_id_);
+  if (disarm_after_completion_ && !vehicle_command_client_.disarm()) {
+    RCLCPP_WARN(this->node_ptr_->get_logger(), "Failed to disarm after flight mode %i completion", mode_id_);
+  }
   return ActionStatus::SUCCESS;
 }
 
@@ -398,7 +434,18 @@ template <class ActionT>
 bool ModeExecutor<ActionT>::isCompleted(
   std::shared_ptr<const Goal> /*goal_ptr*/, const px4_msgs::msg::VehicleStatus & /*vehicle_status*/)
 {
-  return mode_completed_;
+  if (!mode_completed_result_.has_value()) {
+    return false;
+  }
+  if (*mode_completed_result_ == px4_msgs::msg::ModeCompleted::RESULT_SUCCESS) {
+    return true;
+  } else {
+    RCLCPP_INFO(
+      this->node_ptr_->get_logger(), "Flight mode %i completed unsuccessfully (result: %i). Aborting...", mode_id_,
+      static_cast<int>(*mode_completed_result_));
+    this->action_context_ptr_->abort();
+  }
+  return false;
 }
 
 template <class ActionT>
@@ -416,7 +463,8 @@ uint8_t ModeExecutor<ActionT>::getModeID() const
 
 template <class ActionT, class ModeT>
 ModeExecutorFactory<ActionT, ModeT>::ModeExecutorFactory(
-  const std::string & action_name, const rclcpp::NodeOptions & options, bool deactivate_before_completion)
+  const std::string & action_name, const rclcpp::NodeOptions & options,
+  VehicleCommandClient::FlightMode deactivation_flight_mode, bool disarm_after_completion)
 : node_ptr_(std::make_shared<rclcpp::Node>(action_name + "_node", options))
 {
   static_assert(
@@ -449,7 +497,7 @@ ModeExecutorFactory<ActionT, ModeT>::ModeExecutorFactory(
 
   // AFTER (!) registration, the mode id can be queried to set up the executor
   mode_executor_ptr_ = std::make_shared<ModeExecutor<ActionT>>(
-    action_name, node_ptr_, action_context_ptr, mode_ptr_->id(), deactivate_before_completion);
+    action_name, node_ptr_, action_context_ptr, mode_ptr_->id(), deactivation_flight_mode, disarm_after_completion);
 }
 
 template <class ActionT, class ModeT>

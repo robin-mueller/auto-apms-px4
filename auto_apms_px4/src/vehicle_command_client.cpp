@@ -68,6 +68,7 @@ VehicleCommandClient::SendCommandResult VehicleCommandClient::syncSendVehicleCom
 VehicleCommandClient::SendCommandResult VehicleCommandClient::syncSendVehicleCommand(
   const px4_msgs::msg::VehicleCommand & cmd) const
 {
+  // Default to rejected, will be set to accepted if acknowledgement received
   SendCommandResult result = SendCommandResult::REJECTED;
   using AckWaitSet = rclcpp::StaticWaitSet<1, 0, 0, 0, 0, 0>;
   AckWaitSet wait_set({{{vehicle_command_ack_sub_}}});

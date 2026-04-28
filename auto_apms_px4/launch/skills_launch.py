@@ -13,47 +13,62 @@
 # limitations under the License.
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 
-ALL_SKILL_NAMES = [
-    "auto_apms_px4::ArmDisarmSkill",
-    "auto_apms_px4::EnableHoldSkill",
-    "auto_apms_px4::GoToGlobalSkill",
-    "auto_apms_px4::GoToLocalSkill",
-    "auto_apms_px4::LandSkill",
-    "auto_apms_px4::TakeoffSkill",
-    "auto_apms_px4::RTLSkill",
-    # "auto_apms_px4::MissionSkill",
-    "auto_apms_px4::SetActuatorsSkill",
-]
+ALL_SKILLS = {
+    "arm_disarm_node": "auto_apms_px4::ArmDisarmSkill",
+    "enable_hold_node": "auto_apms_px4::EnableHoldSkill",
+    "goto_global_node": "auto_apms_px4::GoToGlobalSkill",
+    "goto_local_node": "auto_apms_px4::GoToLocalSkill",
+    "land_node": "auto_apms_px4::LandSkill",
+    "takeoff_node": "auto_apms_px4::TakeoffSkill",
+    "rtl_node": "auto_apms_px4::RTLSkill",
+    # "mission_node": "auto_apms_px4::MissionSkill",
+    "set_actuators_node": "auto_apms_px4::SetActuatorsSkill",
+}
+
+
+def launch_setup(context, *args, **kwargs):
+    namespace = LaunchConfiguration("namespace").perform(context)
+    log_level = LaunchConfiguration("log_level").perform(context)
+
+    ros_arguments = [arg for name in ALL_SKILLS for arg in ["--log-level", f"{name}:={log_level}"]]
+
+    return [
+        ComposableNodeContainer(
+            name="skill_container",
+            namespace=namespace,
+            exec_name="skill_container",
+            package="rclcpp_components",
+            executable="component_container",
+            composable_node_descriptions=[
+                ComposableNode(package="auto_apms_px4", plugin=plugin, name=name, namespace=namespace)
+                for name, plugin in ALL_SKILLS.items()
+            ],
+            ros_arguments=ros_arguments,
+            output="screen",
+            emulate_tty=True,
+        )
+    ]
 
 
 def generate_launch_description():
-    ns_arg = DeclareLaunchArgument(
-        "namespace",
-        default_value="",
-        description="Namespace for the nodes",
-    )
-    namespace = LaunchConfiguration("namespace")
-
     return LaunchDescription(
         [
-            ns_arg,
-            ComposableNodeContainer(
-                name="skill_container",
-                namespace=namespace,
-                exec_name="skill_container",
-                package="rclcpp_components",
-                executable="component_container",
-                composable_node_descriptions=[
-                    ComposableNode(package="auto_apms_px4", plugin=name, namespace=namespace)
-                    for name in ALL_SKILL_NAMES
-                ],
-                output="screen",
-                emulate_tty=True,
+            DeclareLaunchArgument(
+                "namespace",
+                default_value="",
+                description="Namespace for the nodes",
             ),
+            DeclareLaunchArgument(
+                "log_level",
+                default_value="info",
+                description="Logging level for all skill nodes",
+                choices=["debug", "info", "warn", "error", "fatal"],
+            ),
+            OpaqueFunction(function=launch_setup),
         ]
     )

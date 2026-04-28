@@ -52,36 +52,76 @@ protected:
   }
 
 private:
-  virtual void OnActivateWithGoal(std::shared_ptr<const Goal> goal_ptr);
-  virtual void UpdateSetpointWithGoal(
+  /* Virtual methods */
+
+  virtual void onActivateWithGoal(std::shared_ptr<const Goal> goal_ptr);
+  virtual void onDeactivateWithGoal(std::shared_ptr<const Goal> goal_ptr);
+
+  /**
+   * The following methods MUST call the special 'completed' method when the mode is finished to gracefully exit the
+   * mode.
+   */
+
+  virtual void updateSetpointWithGoal(
     float dt_s, std::shared_ptr<const Goal> goal_ptr, std::shared_ptr<Feedback> feedback_ptr,
     std::shared_ptr<Result> result_ptr) = 0;
-  virtual void onDeactivate() override {}
+  virtual void updateSetpointOnCancel(
+    float dt_s, std::shared_ptr<const Goal> goal_ptr, std::shared_ptr<Feedback> feedback_ptr,
+    std::shared_ptr<Result> result_ptr);
 
-  void onActivate() override;
+  /* Overridden base methods */
+
+  void onDeactivate() override final;
+  void onActivate() override final;
   void updateSetpoint(float dt_s) override;
 
   const std::shared_ptr<ActionContextType> action_context_ptr_;
 };
 
 template <class ActionT>
-void ModeBase<ActionT>::OnActivateWithGoal(std::shared_ptr<const Goal> goal_ptr)
+void ModeBase<ActionT>::onActivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/)
 {
-  (void)goal_ptr;
+}
+
+template <class ActionT>
+void ModeBase<ActionT>::onDeactivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/)
+{
+}
+
+template <class ActionT>
+void ModeBase<ActionT>::updateSetpointOnCancel(
+  float /*dt_s*/, std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Feedback> /*feedback_ptr*/,
+  std::shared_ptr<Result> /*result_ptr*/)
+{
+  completed(px4_ros2::Result::Interrupted);
 }
 
 template <class ActionT>
 void ModeBase<ActionT>::onActivate()
 {
-  OnActivateWithGoal(action_context_ptr_->getGoalHandlePtr()->get_goal());
+  onActivateWithGoal(action_context_ptr_->getGoalHandlePtr()->get_goal());
+}
+
+template <class ActionT>
+void ModeBase<ActionT>::onDeactivate()
+{
+  const auto goal_handle_ptr = action_context_ptr_->getGoalHandlePtr();
+  onDeactivateWithGoal(goal_handle_ptr ? goal_handle_ptr->get_goal() : nullptr);
 }
 
 template <class ActionT>
 void ModeBase<ActionT>::updateSetpoint(float dt_s)
 {
-  UpdateSetpointWithGoal(
-    dt_s, action_context_ptr_->getGoalHandlePtr()->get_goal(), action_context_ptr_->getFeedbackPtr(),
-    action_context_ptr_->getResultPtr());
+  if (action_context_ptr_->isValid()) {
+    const auto goal_handle_ptr = action_context_ptr_->getGoalHandlePtr();
+    if (goal_handle_ptr->is_canceling()) {
+      updateSetpointOnCancel(
+        dt_s, goal_handle_ptr->get_goal(), action_context_ptr_->getFeedbackPtr(), action_context_ptr_->getResultPtr());
+    } else {
+      updateSetpointWithGoal(
+        dt_s, goal_handle_ptr->get_goal(), action_context_ptr_->getFeedbackPtr(), action_context_ptr_->getResultPtr());
+    }
+  }
 }
 
 template <class ActionT>
@@ -99,21 +139,21 @@ protected:
     vehicle_attitude_ptr_ = std::make_shared<px4_ros2::OdometryAttitude>(*this);
   }
 
-  bool IsGlobalPositionReached(
+  bool isGlobalPositionReached(
     const Eigen::Vector3d & target_position_f_glob, double reached_thresh_pos_m = 0.5,
     double reached_thresh_vel_m_s = 0.3) const;
 
-  bool IsLocalPositionReached(
+  bool isLocalPositionReached(
     const Eigen::Vector3d & target_position_f_ned, double reached_thresh_pos_m = 0.5,
     double reached_thresh_vel_m_s = 0.3) const;
 
-  bool IsGlobalAltitudeReached(
+  bool isGlobalAltitudeReached(
     float target_altitude_amsl_m, double reached_thresh_pos_m = 0.5, double reached_thresh_vel_m_s = 0.3) const;
 
-  bool IsLocalAltitudeReached(
+  bool isLocalAltitudeReached(
     float target_altitude_hagl_m, double reached_thresh_pos_m = 0.5, double reached_thresh_vel_m_s = 0.3) const;
 
-  bool IsHeadingReached(float target_heading_rad, double reached_thresh_heading_rad = 0.12) const;
+  bool isHeadingReached(float target_heading_rad, double reached_thresh_heading_rad = 0.12) const;
 
 protected:
   std::shared_ptr<px4_ros2::OdometryGlobalPosition> vehicle_global_position_ptr_;
@@ -122,7 +162,7 @@ protected:
 };
 
 template <class ActionT>
-bool PositionAwareMode<ActionT>::IsGlobalPositionReached(
+bool PositionAwareMode<ActionT>::isGlobalPositionReached(
   const Eigen::Vector3d & target_position_f_glob, double reached_thresh_pos_m, double reached_thresh_vel_m_s) const
 {
   const float position_error_m =
@@ -132,7 +172,7 @@ bool PositionAwareMode<ActionT>::IsGlobalPositionReached(
 }
 
 template <class ActionT>
-bool PositionAwareMode<ActionT>::IsLocalPositionReached(
+bool PositionAwareMode<ActionT>::isLocalPositionReached(
   const Eigen::Vector3d & target_position_f_ned, double reached_thresh_pos_m, double reached_thresh_vel_m_s) const
 {
   const px4_msgs::msg::VehicleLocalPosition & pos = vehicle_local_position_ptr_->last();
@@ -143,25 +183,25 @@ bool PositionAwareMode<ActionT>::IsLocalPositionReached(
 }
 
 template <class ActionT>
-bool PositionAwareMode<ActionT>::IsGlobalAltitudeReached(
+bool PositionAwareMode<ActionT>::isGlobalAltitudeReached(
   float target_altitude_amsl_m, double reached_thresh_pos_m, double reached_thresh_vel_m_s) const
 {
   Eigen::Vector3d target_position_f_glob = vehicle_global_position_ptr_->position();
   target_position_f_glob.z() = target_altitude_amsl_m;
-  return IsGlobalPositionReached(target_position_f_glob, reached_thresh_pos_m, reached_thresh_vel_m_s);
+  return isGlobalPositionReached(target_position_f_glob, reached_thresh_pos_m, reached_thresh_vel_m_s);
 }
 
 template <class ActionT>
-bool PositionAwareMode<ActionT>::IsLocalAltitudeReached(
+bool PositionAwareMode<ActionT>::isLocalAltitudeReached(
   float target_altitude_hagl_m, double reached_thresh_pos_m, double reached_thresh_vel_m_s) const
 {
   const px4_msgs::msg::VehicleLocalPosition & pos = vehicle_local_position_ptr_->last();
   const Eigen::Vector3d target_position_f_ned(pos.x, pos.y, target_altitude_hagl_m);
-  return IsLocalPositionReached(target_position_f_ned, reached_thresh_pos_m, reached_thresh_vel_m_s);
+  return isLocalPositionReached(target_position_f_ned, reached_thresh_pos_m, reached_thresh_vel_m_s);
 }
 
 template <class ActionT>
-bool PositionAwareMode<ActionT>::IsHeadingReached(float target_heading_rad, double reached_thresh_heading_rad) const
+bool PositionAwareMode<ActionT>::isHeadingReached(float target_heading_rad, double reached_thresh_heading_rad) const
 {
   const float heading_error_wrapped = px4_ros2::wrapPi(target_heading_rad - vehicle_attitude_ptr_->yaw());
   return fabsf(heading_error_wrapped) <= fabsf(reached_thresh_heading_rad);

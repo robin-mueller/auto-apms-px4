@@ -23,7 +23,7 @@ class EnableHoldSkill : public ModeExecutor<auto_apms_px4_interfaces::action::En
 {
 public:
   explicit EnableHoldSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutor{_AUTO_APMS_PX4__ENABLE_HOLD_ACTION_NAME, options, FlightMode::Hold, false}
+  : ModeExecutor{_AUTO_APMS_PX4__ENABLE_HOLD_ACTION_NAME, options, FlightMode::Hold, FlightMode::Unset}
   {
   }
 

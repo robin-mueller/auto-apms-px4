@@ -37,6 +37,7 @@ class VehicleCommandClient
 public:
   enum class FlightMode : uint8_t
   {
+    Unset = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_MAX,
     Takeoff = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_TAKEOFF,
     Land = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_LAND,
     Hold = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_LOITER,
