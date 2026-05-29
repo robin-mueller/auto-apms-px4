@@ -35,7 +35,7 @@ def launch_setup(context, *args, **kwargs):
     namespace = LaunchConfiguration("namespace").perform(context)
     log_level = LaunchConfiguration("log_level").perform(context)
 
-    ros_arguments = [arg for name in ALL_SKILLS for arg in ["--log-level", f"{name}:={log_level}"]]
+    ros_arguments = [arg for name in ALL_SKILLS for arg in ["--log-level", f"{namespace}.{name}:={log_level}"]]
 
     return [
         ComposableNodeContainer(

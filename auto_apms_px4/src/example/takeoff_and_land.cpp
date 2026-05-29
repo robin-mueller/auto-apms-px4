@@ -72,7 +72,7 @@ int main(int argc, char * argv[])
   RCLCPP_INFO(node_ptr->get_logger(), "Taking off ...");
 
   TakeoffAction::Goal takeoff_goal;
-  takeoff_goal.altitude_amsl_m = 1e9;
+  takeoff_goal.alt = 1e9;
   auto takeoff_future = takeoff_client.syncSendGoal(takeoff_goal);
 
   if (takeoff_future.wait_for(0s) == std::future_status::ready && !takeoff_future.get()) {

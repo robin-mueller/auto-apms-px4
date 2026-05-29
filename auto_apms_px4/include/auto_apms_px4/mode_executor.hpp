@@ -123,6 +123,8 @@ public:
     const std::string & action_name, const rclcpp::NodeOptions & options, FlightMode flight_mode,
     FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
 
+  static bool isExternalMode(uint8_t mode_id);
+
 private:
   void setUp();
   auto_apms_util::ActionStatus asyncDeactivateFlightMode();
@@ -145,6 +147,7 @@ protected:
 private:
   const VehicleCommandClient vehicle_command_client_;
   const uint8_t mode_id_;
+  bool is_custom_mode_{false};  // Whether the mode is a custom mode (i.e. not one of the standard PX4 modes)
   FlightMode deactivation_flight_mode_;
   bool disarm_after_completion_;
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_ptr_;
@@ -206,6 +209,7 @@ ModeExecutor<ActionT>::ModeExecutor(
 : auto_apms_util::ActionWrapper<ActionT>(action_name, options),
   vehicle_command_client_(*this->node_ptr_),
   mode_id_(mode_id),
+  is_custom_mode_(isExternalMode(mode_id_)),
   deactivation_flight_mode_(deactivation_flight_mode),
   disarm_after_completion_(disarm_after_completion)
 {
@@ -219,6 +223,14 @@ ModeExecutor<ActionT>::ModeExecutor(
 : ModeExecutor<ActionT>(
     action_name, options, static_cast<uint8_t>(flight_mode), deactivation_flight_mode, disarm_after_completion)
 {
+}
+
+template <class ActionT>
+inline bool ModeExecutor<ActionT>::isExternalMode(uint8_t mode_id)
+{
+  const uint8_t first_external_mode_nav_state = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_EXTERNAL1;
+  const uint8_t max_external_mode_nav_state = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_EXTERNAL8 + 1;
+  return mode_id >= first_external_mode_nav_state && mode_id < max_external_mode_nav_state;
 }
 
 template <class ActionT>
@@ -309,9 +321,12 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::cancelGoal(
   std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Result> /*result_ptr*/)
 {
   // The custom mode is responsible for managing the lifecycle of the cancellation via the onGoalCanceled callback.
-  // Wait until the mode signals completion (by calling completed()) or PX4 deactivates it externally.
-  if (state_ != State::COMPLETE) {
-    // During cancellation, we bypass the custom isCompleted method
+  // Wait until the mode signals completion (by calling completed()) or PX4 deactivates it externally. For standard
+  // modes, continue immediately with deactivation since we can't rely on the mode_completed topic for standard modes as
+  // they usually don't publish to it.
+  if (is_custom_mode_ && state_ != State::COMPLETE) {
+    // During cancellation, we bypass the custom isCompleted method and simply wait for any mode completion signal
+    // regardless the value
     if (mode_completed_result_.has_value()) {
       state_ = State::COMPLETE;
     } else {

@@ -17,6 +17,8 @@
 #include "auto_apms_behavior_tree_core/node.hpp"
 
 #define INPUT_KEY_ALTITUDE "alt"
+#define INPUT_KEY_USE_AMSL "use_amsl"
+#define INPUT_KEY_HEADING "heading"
 
 namespace auto_apms_px4_behavior
 {
@@ -28,17 +30,24 @@ public:
 
   static BT::PortsList providedPorts()
   {
-    return {BT::InputPort<double>(INPUT_KEY_ALTITUDE, "Target takeoff altitude in meter (AMSL)")};
+    return {
+      BT::InputPort<float>(INPUT_KEY_ALTITUDE, "Target altitude for takeoff in meters"),
+      BT::InputPort<bool>(
+        INPUT_KEY_USE_AMSL, false,
+        "If true, altitude is interpreted as above mean sea level (AMSL), otherwise as altitude above takeoff point"),
+      BT::InputPort<float>(INPUT_KEY_HEADING, 0.0, "Heading after takeoff in radians from north in NED frame")};
   }
 
   bool setGoal(Goal & goal)
   {
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_ALTITUDE)) {
-      goal.altitude_amsl_m = expected.value();
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_ALTITUDE)) {
+      goal.alt = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s", expected.error().c_str());
       return false;
     }
+    goal.use_amsl = getInput<bool>(INPUT_KEY_USE_AMSL).value();
+    goal.heading_rad = getInput<float>(INPUT_KEY_HEADING).value();
     return true;
   }
 };

@@ -15,6 +15,8 @@
 #include "auto_apms_px4_interfaces/action/takeoff.hpp"
 
 #include "auto_apms_px4/mode_executor.hpp"
+#include "px4_msgs/msg/vehicle_global_position.hpp"
+#include "px4_ros2/utils/message_version.hpp"
 
 namespace auto_apms_px4
 {
@@ -25,13 +27,28 @@ public:
   explicit TakeoffSkill(const rclcpp::NodeOptions & options)
   : ModeExecutor(_AUTO_APMS_PX4__TAKEOFF_ACTION_NAME, options, FlightMode::Takeoff)
   {
+    vehicle_global_position_sub_ptr_ = this->node_ptr_->create_subscription<px4_msgs::msg::VehicleGlobalPosition>(
+      "fmu/out/vehicle_global_position" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleGlobalPosition>(),
+      rclcpp::SensorDataQoS(), [this](const px4_msgs::msg::VehicleGlobalPosition::SharedPtr msg_ptr) {
+        last_vehicle_global_position_ = std::move(*msg_ptr);
+      });
   }
 
 private:
   bool sendActivationCommand(const VehicleCommandClient & client, std::shared_ptr<const Goal> goal_ptr) override final
   {
-    return client.takeoff(goal_ptr->altitude_amsl_m, goal_ptr->heading_rad);
+    float target_altitude = goal_ptr->alt;
+    if (!goal_ptr->use_amsl) {
+      target_altitude += last_vehicle_global_position_.alt;
+    }
+    RCLCPP_DEBUG(
+      node_ptr_->get_logger(), "Target altitude: %f m (AMSL) - Heading: %f rad", target_altitude,
+      goal_ptr->heading_rad);
+    return client.takeoff(target_altitude, goal_ptr->heading_rad);
   }
+
+  rclcpp::Subscription<px4_msgs::msg::VehicleGlobalPosition>::SharedPtr vehicle_global_position_sub_ptr_;
+  px4_msgs::msg::VehicleGlobalPosition last_vehicle_global_position_;
 };
 
 }  // namespace auto_apms_px4

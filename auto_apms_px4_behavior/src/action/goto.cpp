@@ -45,19 +45,19 @@ public:
         INPUT_KEY_FRAME, "global",
         "Reference frame: 'global' (Latitude, longitude, altitude (AMSL)) or 'local' (North, east, down from start)"),
       BT::InputPort<Eigen::MatrixXd>(INPUT_KEY_VEC, "Target position as a row vector (separated by ';')"),
-      BT::InputPort<double>(INPUT_KEY_X, "Override vector entry X"),
-      BT::InputPort<double>(INPUT_KEY_Y, "Override vector entry Y"),
-      BT::InputPort<double>(INPUT_KEY_Z, "Override vector entry Z"),
-      BT::InputPort<double>(INPUT_KEY_YAW, "Desired yaw position in degree from north (heading) [-180°, 180)"),
-      BT::InputPort<double>(INPUT_KEY_MAX_HOR_VEL, 10.0, "Maximum horizontal velocity [m/s]"),
-      BT::InputPort<double>(INPUT_KEY_MAX_VER_VEL, 5.0, "Maximum vertical velocity [m/s]"),
-      BT::InputPort<double>(INPUT_KEY_MAX_HEADING_RATE, 30.0, "Maximum heading rate [°/s]"),
-      BT::InputPort<double>(
+      BT::InputPort<float>(INPUT_KEY_X, "Override vector entry X"),
+      BT::InputPort<float>(INPUT_KEY_Y, "Override vector entry Y"),
+      BT::InputPort<float>(INPUT_KEY_Z, "Override vector entry Z"),
+      BT::InputPort<float>(INPUT_KEY_YAW, "Desired yaw position in degree from north (heading) [-180°, 180)"),
+      BT::InputPort<float>(INPUT_KEY_MAX_HOR_VEL, 10.0, "Maximum horizontal velocity [m/s]"),
+      BT::InputPort<float>(INPUT_KEY_MAX_VER_VEL, 5.0, "Maximum vertical velocity [m/s]"),
+      BT::InputPort<float>(INPUT_KEY_MAX_HEADING_RATE, 30.0, "Maximum heading rate [°/s]"),
+      BT::InputPort<float>(
         INPUT_KEY_REACHED_THRESH_POS, .5, "Maximum position error [m] under which the position is considered reached"),
-      BT::InputPort<double>(
+      BT::InputPort<float>(
         INPUT_KEY_REACHED_THRESH_VEL, .3,
         "Maximum velocity error [m/s] under which the position is considered reached"),
-      BT::InputPort<double>(
+      BT::InputPort<float>(
         INPUT_KEY_REACHED_THRESH_YAW, 7.0, "Maximum heading error [°] under which the position is considered reached")};
   }
 
@@ -102,7 +102,7 @@ public:
 
     input_port_it = config().input_ports.find(INPUT_KEY_X);
     if (input_port_it != config().input_ports.end() && !input_port_it->second.empty()) {
-      if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_X)) {
+      if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_X)) {
         goal.pos.x = expected.value();
         position_valid++;
       } else {
@@ -114,7 +114,7 @@ public:
 
     input_port_it = config().input_ports.find(INPUT_KEY_Y);
     if (input_port_it != config().input_ports.end() && !input_port_it->second.empty()) {
-      if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_Y)) {
+      if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_Y)) {
         goal.pos.y = expected.value();
         position_valid++;
       } else {
@@ -126,7 +126,7 @@ public:
 
     input_port_it = config().input_ports.find(INPUT_KEY_Z);
     if (input_port_it != config().input_ports.end() && !input_port_it->second.empty()) {
-      if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_Z)) {
+      if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_Z)) {
         goal.pos.z = expected.value();
         position_valid++;
       } else {
@@ -144,10 +144,8 @@ public:
     }
 
     input_port_it = config().input_ports.find(INPUT_KEY_YAW);
-    if (input_port_it == config().input_ports.end() || input_port_it->second.empty()) {
-      goal.head_towards_destination = true;
-    } else {
-      if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_YAW)) {
+    if (input_port_it != config().input_ports.end() && !input_port_it->second.empty()) {
+      if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_YAW)) {
         goal.head_towards_destination = false;
         goal.heading_clockwise_from_north_deg = expected.value();
       } else {
@@ -155,44 +153,46 @@ public:
           logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
         return false;
       }
+    } else {
+      goal.head_towards_destination = true;
     }
 
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_MAX_HOR_VEL)) {
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_MAX_HOR_VEL)) {
       goal.max_horizontal_vel_m_s = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
       return false;
     }
 
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_MAX_VER_VEL)) {
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_MAX_VER_VEL)) {
       goal.max_vertical_vel_m_s = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
       return false;
     }
 
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_MAX_HEADING_RATE)) {
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_MAX_HEADING_RATE)) {
       goal.max_heading_rate_deg_s = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
       return false;
     }
 
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_REACHED_THRESH_POS)) {
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_REACHED_THRESH_POS)) {
       goal.reached_thresh_pos_m = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
       return false;
     }
 
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_REACHED_THRESH_VEL)) {
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_REACHED_THRESH_VEL)) {
       goal.reached_thresh_vel_m_s = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
       return false;
     }
 
-    if (const BT::Expected<double> expected = getInput<double>(INPUT_KEY_REACHED_THRESH_YAW)) {
+    if (const BT::Expected<float> expected = getInput<float>(INPUT_KEY_REACHED_THRESH_YAW)) {
       goal.reached_thresh_heading_deg = expected.value();
     } else {
       RCLCPP_ERROR(logger_, "%s - %s", context_.getFullyQualifiedTreeNodeName(this).c_str(), expected.error().c_str());
