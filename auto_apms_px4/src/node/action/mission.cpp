@@ -18,7 +18,7 @@
 
 #define INPUT_KEY_DO_RESTART "do_restart"
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 class MissionAction : public auto_apms_behavior_tree::core::RosActionNode<auto_apms_px4_interfaces::action::Mission>
@@ -44,6 +44,6 @@ public:
   }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::MissionAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::MissionAction)

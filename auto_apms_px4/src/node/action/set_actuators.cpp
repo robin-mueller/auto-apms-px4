@@ -20,7 +20,7 @@
 #define INPUT_KEY_SERVO_COMMANDS "servo_commands"
 #define INPUT_KEY_HOLD_PERIOD_MS "hold_period_ms"
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 class SetActuatorsAction
@@ -74,6 +74,6 @@ public:
   }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::SetActuatorsAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::SetActuatorsAction)

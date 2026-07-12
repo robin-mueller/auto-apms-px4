@@ -17,7 +17,7 @@
 
 #define INPUT_KEY_WAIT "wait_until_ready_to_arm"
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 class ArmAction : public auto_apms_behavior_tree::core::RosActionNode<auto_apms_px4_interfaces::action::ArmDisarm>
@@ -47,6 +47,6 @@ public:
   }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::ArmAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::ArmAction)

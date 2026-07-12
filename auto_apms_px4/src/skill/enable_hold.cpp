@@ -14,16 +14,16 @@
 
 #include "auto_apms_px4_interfaces/action/enable_hold.hpp"
 
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 
 namespace auto_apms_px4
 {
 
-class EnableHoldSkill : public ModeExecutor<auto_apms_px4_interfaces::action::EnableHold>
+class EnableHoldSkill : public ModeProxyAction<auto_apms_px4_interfaces::action::EnableHold>
 {
 public:
   explicit EnableHoldSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutor{_AUTO_APMS_PX4__ENABLE_HOLD_ACTION_NAME, options, FlightMode::Hold, FlightMode::Unset}
+  : ModeProxyAction{_AUTO_APMS_PX4__ENABLE_HOLD_ACTION_NAME, options, FlightMode::Hold, FlightMode::Unset}
   {
   }
 

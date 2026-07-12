@@ -10,6 +10,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
 set(MESSAGE_SOURCES
+    "msg/RegisteredMode.msg"
 )
 set(SERVICE_SOURCES
 )

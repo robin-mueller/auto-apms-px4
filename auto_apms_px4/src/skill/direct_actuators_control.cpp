@@ -15,7 +15,7 @@
 #include <limits>
 
 #include "auto_apms_px4/mode.hpp"
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 #include "auto_apms_px4_interfaces/action/set_actuators.hpp"
 #include "px4_ros2/control/setpoint_types/direct_actuators.hpp"
 
@@ -24,7 +24,7 @@ namespace auto_apms_px4
 
 using SetActuatorsActionType = auto_apms_px4_interfaces::action::SetActuators;
 
-class SetActuatorsMode : public ModeBase<SetActuatorsActionType>
+class SetActuatorsMode : public ActionDrivenMode<SetActuatorsActionType>
 {
   std::shared_ptr<px4_ros2::DirectActuatorsSetpointType> actuator_setpoint_ptr_;
   rclcpp::Time activation_time_;
@@ -32,7 +32,7 @@ class SetActuatorsMode : public ModeBase<SetActuatorsActionType>
 public:
   SetActuatorsMode(
     rclcpp::Node & node, px4_ros2::ModeBase::Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
-  : ModeBase{node, settings, action_context_ptr}
+  : ActionDrivenMode{node, settings, action_context_ptr}
   {
     actuator_setpoint_ptr_ = std::make_shared<px4_ros2::DirectActuatorsSetpointType>(*this);
   }
@@ -98,11 +98,11 @@ private:
   }
 };
 
-class SetActuatorsSkill : public ModeExecutorFactory<SetActuatorsActionType, SetActuatorsMode>
+class SetActuatorsSkill : public ModeProxyActionFactory<SetActuatorsActionType, SetActuatorsMode>
 {
 public:
   explicit SetActuatorsSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutorFactory{
+  : ModeProxyActionFactory{
       _AUTO_APMS_PX4__SET_ACTUATORS_ACTION_NAME, options, VehicleCommandClient::FlightMode::Unset, true}
   {
   }

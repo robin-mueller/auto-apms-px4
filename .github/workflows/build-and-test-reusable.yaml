@@ -36,7 +36,6 @@ jobs:
           package-name: |
             auto_apms_px4
             auto_apms_px4_interfaces
-            auto_apms_px4_behavior
           vcs-repo-file-url: ${GITHUB_WORKSPACE}/dependencies.repos
           coverage-result: false
           colcon-defaults: |

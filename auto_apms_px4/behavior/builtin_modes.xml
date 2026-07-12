@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <!--
+    Behaviors that switch the vehicle into a builtin PX4 flight mode and only return once the mode is actually
+    active. Each mode is represented as its own tree so it can be run as a self-contained behavior (via the
+    executor's entry_point) or reused as a subtree. They all delegate to the reusable SwitchModeAndWait tree, which
+    requests the mode via SwitchMode and then blocks in a retry loop on CheckNavState until the FMU reports the
+    requested nav_state as active.
+
+    The nav_state values match px4_msgs/msg/VehicleStatus:
+      2  = POSCTL (Position)    3  = AUTO_MISSION (Mission)   4  = AUTO_LOITER (Hold)
+      5  = AUTO_RTL (RTL)      17  = AUTO_TAKEOFF (Takeoff)  18  = AUTO_LAND (Land)
+  -->
+
+  <!-- Reusable helper: request the mode given by the 'nav_state' port and wait until it becomes active. -->
+  <BehaviorTree ID="SwitchModeAndWait">
+    <Sequence>
+      <SwitchMode nav_state="{nav_state}"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckNavState nav_state="{nav_state}"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Hold">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="4"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="ReturnToLaunch">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="5"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Land">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="18"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Takeoff">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="17"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Position">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="2"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="Mission">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="3"/>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="SwitchMode">
+      <input_port name="nav_state"
+                  type="int">Target PX4 navigation state (mode id) to switch to.</input_port>
+    </Action>
+    <Condition ID="CheckNavState">
+      <input_port name="nav_state"
+                  type="int">Expected PX4 navigation state (mode id) the vehicle should be in.</input_port>
+    </Condition>
+  </TreeNodesModel>
+
+</root>

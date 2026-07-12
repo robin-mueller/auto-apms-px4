@@ -14,16 +14,16 @@
 
 #include "auto_apms_px4_interfaces/action/rtl.hpp"
 
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 
 namespace auto_apms_px4
 {
 
-class RTLSkill : public ModeExecutor<auto_apms_px4_interfaces::action::RTL>
+class RTLSkill : public ModeProxyAction<auto_apms_px4_interfaces::action::RTL>
 {
 public:
   explicit RTLSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutor{_AUTO_APMS_PX4__RTL_ACTION_NAME, options, FlightMode::RTL}
+  : ModeProxyAction{_AUTO_APMS_PX4__RTL_ACTION_NAME, options, FlightMode::RTL}
   {
   }
 
@@ -31,7 +31,7 @@ private:
   // PX4 seems to not always give a completed signal for RTL, so check for disarmed as a fallback completed state
   bool isCompleted(std::shared_ptr<const Goal> goal_ptr, const px4_msgs::msg::VehicleStatus & vehicle_status)
   {
-    return ModeExecutor::isCompleted(goal_ptr, vehicle_status) ||
+    return ModeProxyAction::isCompleted(goal_ptr, vehicle_status) ||
            vehicle_status.arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_DISARMED;
   }
 };

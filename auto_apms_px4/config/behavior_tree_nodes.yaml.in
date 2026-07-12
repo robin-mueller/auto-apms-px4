@@ -52,15 +52,35 @@ Takeoff:
   description: "Commands the vehicle to take off to a specified altitude"
   topic: takeoff
 
+SendVehicleCommand:
+  class_name: ${PROJECT_NAME}::SendVehicleCommand
+  description: "Publishes a raw PX4 VehicleCommand (command id + param1..param7) while respecting mode-executor ownership"
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see SendVehicleCommand.
+
+SwitchMode:
+  class_name: ${PROJECT_NAME}::SwitchMode
+  description: "Switches the active PX4 flight mode (by nav_state) while respecting mode-executor ownership"
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see SendVehicleCommand.
+
+CheckNavState:
+  class_name: ${PROJECT_NAME}::CheckNavState
+  description: "Succeeds once the vehicle's active PX4 navigation state (nav_state) matches the expected one"
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see CheckNavState.
+
+GetModeNavState:
+  class_name: ${PROJECT_NAME}::GetModeNavState
+  description: "Resolves a registered PX4 mode's name to the nav_state (mode id) PX4 assigned it during registration"
+  topic: registered_modes
+
 GetGlobalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<GlobalPositionMsg>
   description: "Gets the current position of the vehicle in the global coordinate frame"
-  topic: fmu/out/vehicle_global_position
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see GetPosition.
 
 GetLocalPosition:
   class_name: ${PROJECT_NAME}::GetPosition<LocalPositionMsg>
   description: "Gets the current position of the vehicle in the local coordinate frame"
-  topic: fmu/out/vehicle_local_position_v1
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see GetPosition.
 
 SetActuators:
   class_name: ${PROJECT_NAME}::SetActuatorsAction

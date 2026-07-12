@@ -14,18 +14,18 @@
 
 #include "auto_apms_px4_interfaces/action/takeoff.hpp"
 
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 #include "px4_msgs/msg/vehicle_global_position.hpp"
 #include "px4_ros2/utils/message_version.hpp"
 
 namespace auto_apms_px4
 {
 
-class TakeoffSkill : public ModeExecutor<auto_apms_px4_interfaces::action::Takeoff>
+class TakeoffSkill : public ModeProxyAction<auto_apms_px4_interfaces::action::Takeoff>
 {
 public:
   explicit TakeoffSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutor(_AUTO_APMS_PX4__TAKEOFF_ACTION_NAME, options, FlightMode::Takeoff)
+  : ModeProxyAction(_AUTO_APMS_PX4__TAKEOFF_ACTION_NAME, options, FlightMode::Takeoff)
   {
     vehicle_global_position_sub_ptr_ = this->node_ptr_->create_subscription<px4_msgs::msg::VehicleGlobalPosition>(
       "fmu/out/vehicle_global_position" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleGlobalPosition>(),

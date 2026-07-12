@@ -30,7 +30,7 @@ jobs:
           import-token: ${{ secrets.GITHUB_TOKEN }}
           target-ros2-distro: jazzy
           vcs-repo-file-url: ${GITHUB_WORKSPACE}/update_node_reference_deps.repos
-          package-name: auto_apms_px4_behavior
+          package-name: auto_apms_px4
           coverage-result: false
           colcon-defaults: |
             {
@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           source ${{ steps.ros-build.outputs.ros-workspace-directory-name }}/install/setup.bash
-          ros2 run auto_apms_behavior_tree_core create_node_reference_markdown create_node_reference_markdown_output_px4.md auto_apms_px4_behavior::behavior_tree_nodes
+          ros2 run auto_apms_behavior_tree_core create_node_reference_markdown create_node_reference_markdown_output_px4.md auto_apms_px4::behavior_tree_nodes
 
       - name: Generate GitHub App Token
         id: generate-token

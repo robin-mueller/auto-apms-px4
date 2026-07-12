@@ -34,11 +34,11 @@ namespace auto_apms_px4
  * The workspace must define a ROS 2 action providing the corresponding goal, feedback and result message types.
  *
  * For the user to be able to execute custom PX4 modes that are created by inheriting from this class, a corresponding
- * ModeExecutorFactory must be defined.
+ * ModeProxyActionFactory must be defined.
  * @tparam ActionT Type of the ROS 2 action.
  */
 template <class ActionT>
-class ModeBase : public px4_ros2::ModeBase
+class ActionDrivenMode : public px4_ros2::ModeBase
 {
 protected:
   using ActionContextType = auto_apms_util::ActionContext<ActionT>;
@@ -46,7 +46,7 @@ protected:
   using Result = typename ActionContextType::Result;
   using Feedback = typename ActionContextType::Feedback;
 
-  ModeBase(rclcpp::Node & node, Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
+  ActionDrivenMode(rclcpp::Node & node, Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
   : px4_ros2::ModeBase{node, settings}, action_context_ptr_{action_context_ptr}
   {
   }
@@ -79,17 +79,17 @@ private:
 };
 
 template <class ActionT>
-void ModeBase<ActionT>::onActivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/)
+void ActionDrivenMode<ActionT>::onActivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/)
 {
 }
 
 template <class ActionT>
-void ModeBase<ActionT>::onDeactivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/)
+void ActionDrivenMode<ActionT>::onDeactivateWithGoal(std::shared_ptr<const Goal> /*goal_ptr*/)
 {
 }
 
 template <class ActionT>
-void ModeBase<ActionT>::updateSetpointOnCancel(
+void ActionDrivenMode<ActionT>::updateSetpointOnCancel(
   float /*dt_s*/, std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Feedback> /*feedback_ptr*/,
   std::shared_ptr<Result> /*result_ptr*/)
 {
@@ -97,20 +97,20 @@ void ModeBase<ActionT>::updateSetpointOnCancel(
 }
 
 template <class ActionT>
-void ModeBase<ActionT>::onActivate()
+void ActionDrivenMode<ActionT>::onActivate()
 {
   onActivateWithGoal(action_context_ptr_->getGoalHandlePtr()->get_goal());
 }
 
 template <class ActionT>
-void ModeBase<ActionT>::onDeactivate()
+void ActionDrivenMode<ActionT>::onDeactivate()
 {
   const auto goal_handle_ptr = action_context_ptr_->getGoalHandlePtr();
   onDeactivateWithGoal(goal_handle_ptr ? goal_handle_ptr->get_goal() : nullptr);
 }
 
 template <class ActionT>
-void ModeBase<ActionT>::updateSetpoint(float dt_s)
+void ActionDrivenMode<ActionT>::updateSetpoint(float dt_s)
 {
   if (action_context_ptr_->isValid()) {
     const auto goal_handle_ptr = action_context_ptr_->getGoalHandlePtr();
@@ -125,14 +125,14 @@ void ModeBase<ActionT>::updateSetpoint(float dt_s)
 }
 
 template <class ActionT>
-class PositionAwareMode : public ModeBase<ActionT>
+class PositionAwareMode : public ActionDrivenMode<ActionT>
 {
 protected:
-  using typename ModeBase<ActionT>::ActionContextType;
+  using typename ActionDrivenMode<ActionT>::ActionContextType;
 
   PositionAwareMode(
     rclcpp::Node & node, px4_ros2::ModeBase::Settings settings, std::shared_ptr<ActionContextType> action_context_ptr)
-  : ModeBase<ActionT>{node, settings, action_context_ptr}
+  : ActionDrivenMode<ActionT>{node, settings, action_context_ptr}
   {
     vehicle_global_position_ptr_ = std::make_shared<px4_ros2::OdometryGlobalPosition>(*this);
     vehicle_local_position_ptr_ = std::make_shared<px4_ros2::OdometryLocalPosition>(*this);

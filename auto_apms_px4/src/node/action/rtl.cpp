@@ -12,26 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "auto_apms_behavior_tree_core/node.hpp"
-#include "auto_apms_px4_interfaces/action/arm_disarm.hpp"
+#include "auto_apms_px4_interfaces/action/rtl.hpp"
 
-namespace auto_apms_px4_behavior
+#include "auto_apms_behavior_tree_core/node.hpp"
+
+namespace auto_apms_px4
 {
 
-class DisarmAction : public auto_apms_behavior_tree::core::RosActionNode<auto_apms_px4_interfaces::action::ArmDisarm>
+class RTLAction : public auto_apms_behavior_tree::core::RosActionNode<auto_apms_px4_interfaces::action::RTL>
 {
 public:
   using RosActionNode::RosActionNode;
 
   static BT::PortsList providedPorts() { return {}; }
-
-  bool setGoal(Goal & goal)
-  {
-    goal.arming_state = Goal::ARMING_STATE_DISARM;
-    return true;
-  }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::DisarmAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::RTLAction)

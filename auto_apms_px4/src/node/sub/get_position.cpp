@@ -18,6 +18,7 @@
 #include "auto_apms_behavior_tree_core/node.hpp"
 #include "px4_msgs/msg/vehicle_global_position.hpp"
 #include "px4_msgs/msg/vehicle_local_position.hpp"
+#include "px4_ros2/utils/message_version.hpp"
 
 #define OUTPUT_KEY_LAT "lat"
 #define OUTPUT_KEY_LON "lon"
@@ -30,7 +31,7 @@
 using GlobalPositionMsg = px4_msgs::msg::VehicleGlobalPosition;
 using LocalPositionMsg = px4_msgs::msg::VehicleLocalPosition;
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 template <class T>
@@ -45,6 +46,12 @@ public:
     const auto_apms_behavior_tree::core::RosNodeContext & context)
   : auto_apms_behavior_tree::core::RosSubscriberNode<T>{instance_name, config, context, rclcpp::SensorDataQoS{}}
   {
+    // Resolve the topic's message version suffix at runtime from the message definition, rather than baking it into
+    // the node manifest at configure time. Since the manifest does not fix a topic, the base class cannot resolve one
+    // at construction and defers creation to this constructor.
+    const std::string base_topic =
+      std::is_same_v<T, GlobalPositionMsg> ? "fmu/out/vehicle_global_position" : "fmu/out/vehicle_local_position";
+    this->createSubscriber(base_topic + px4_ros2::getMessageNameVersion<T>());
   }
 
   static BT::PortsList providedPorts()
@@ -101,7 +108,7 @@ public:
   }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::GetPosition<GlobalPositionMsg>)
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::GetPosition<LocalPositionMsg>)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::GetPosition<GlobalPositionMsg>)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::GetPosition<LocalPositionMsg>)

@@ -16,7 +16,7 @@
 
 #include <Eigen/Core>
 
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 #include "auto_apms_px4_interfaces/action/go_to.hpp"
 #include "px4_ros2/utils/geodesic.hpp"
 #include "tf2_eigen/tf2_eigen.hpp"
@@ -178,20 +178,20 @@ private:
   }
 };
 
-class GoToGlobalSkill : public ModeExecutorFactory<GoToActionType, GoToGlobalMode>
+class GoToGlobalSkill : public ModeProxyActionFactory<GoToActionType, GoToGlobalMode>
 {
 public:
   explicit GoToGlobalSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutorFactory{_AUTO_APMS_PX4__GOTO_GLOBAL_ACTION_NAME, options}
+  : ModeProxyActionFactory{_AUTO_APMS_PX4__GOTO_GLOBAL_ACTION_NAME, options}
   {
   }
 };
 
-class GoToLocalSkill : public ModeExecutorFactory<GoToActionType, GoToLocalMode>
+class GoToLocalSkill : public ModeProxyActionFactory<GoToActionType, GoToLocalMode>
 {
 public:
   explicit GoToLocalSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutorFactory{_AUTO_APMS_PX4__GOTO_LOCAL_ACTION_NAME, options}
+  : ModeProxyActionFactory{_AUTO_APMS_PX4__GOTO_LOCAL_ACTION_NAME, options}
   {
   }
 };

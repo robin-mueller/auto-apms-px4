@@ -17,6 +17,7 @@
 #include <optional>
 
 #include "auto_apms_px4/mode.hpp"
+#include "auto_apms_px4/mode_registration.hpp"
 #include "auto_apms_px4/vehicle_command_client.hpp"
 #include "auto_apms_util/action_wrapper.hpp"
 #include "px4_msgs/msg/mode_completed.hpp"
@@ -51,8 +52,9 @@ namespace auto_apms_px4
  * @brief Generic template class for executing a PX4 mode implementing the interface of a standard ROS 2 action.
  *
  * The modes to be executed must be registered with the PX4 autopilot server before any action goals are sent. By
- * default, only the standard PX4 modes may be executed, but the user may also implement custom modes using ModeBase.
- * Refer to ModeExecutorFactory if you want to set up a ROS 2 node for executing your custom modes.
+ * default, only the standard PX4 modes may be executed, but the user may also implement custom modes using
+ * ActionDrivenMode.
+ * Refer to ModeProxyActionFactory if you want to set up a ROS 2 node for executing your custom modes.
  *
  * ## Usage
  *
@@ -62,15 +64,15 @@ namespace auto_apms_px4
  *
  * ```cpp
  * #include "auto_apms_px4_interfaces/action/takeoff.hpp"
- * #include "auto_apms_px4/mode_executor.hpp"
+ * #include "auto_apms_px4/mode_proxy_action.hpp"
  *
  * namespace my_namespace
  * {
- * class MyTakeoffModeExecutor : public auto_apms_px4::ModeExecutor<auto_apms_px4_interfaces::action::Takeoff>
+ * class MyTakeoffModeProxyAction : public auto_apms_px4::ModeProxyAction<auto_apms_px4_interfaces::action::Takeoff>
  * {
  * public:
- *   explicit MyTakeoffModeExecutor(const rclcpp::NodeOptions & options)
- *   : ModeExecutor("my_executor_name", options, FlightMode::Takeoff)
+ *   explicit MyTakeoffModeProxyAction(const rclcpp::NodeOptions & options)
+ *   : ModeProxyAction("my_proxy_action_name", options, FlightMode::Takeoff)
  *   {
  *   }
  *
@@ -84,7 +86,7 @@ namespace auto_apms_px4
  *
  * // Register the ROS 2 node component
  * #include "rclcpp_components/register_node_macro.hpp"
- * RCLCPP_COMPONENTS_REGISTER_NODE(my_namespace::MyTakeoffModeExecutor)
+ * RCLCPP_COMPONENTS_REGISTER_NODE(my_namespace::MyTakeoffModeProxyAction)
  * ```
  *
  * @note The package `%auto_apms_px4` comes with ROS 2 node components for the most common standard modes and they work
@@ -93,7 +95,7 @@ namespace auto_apms_px4
  * @tparam ActionT Type of the ROS 2 action.
  */
 template <class ActionT>
-class ModeExecutor : public auto_apms_util::ActionWrapper<ActionT>
+class ModeProxyAction : public auto_apms_util::ActionWrapper<ActionT>
 {
   enum class State : uint8_t
   {
@@ -112,14 +114,14 @@ public:
   using typename auto_apms_util::ActionWrapper<ActionT>::Result;
   using ActionStatus = auto_apms_util::ActionStatus;
 
-  explicit ModeExecutor(
+  explicit ModeProxyAction(
     const std::string & action_name, rclcpp::Node::SharedPtr node_ptr,
     std::shared_ptr<ActionContextType> action_context_ptr, uint8_t mode_id,
     FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
-  explicit ModeExecutor(
+  explicit ModeProxyAction(
     const std::string & action_name, const rclcpp::NodeOptions & options, uint8_t mode_id,
     FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
-  explicit ModeExecutor(
+  explicit ModeProxyAction(
     const std::string & action_name, const rclcpp::NodeOptions & options, FlightMode flight_mode,
     FlightMode deactivation_flight_mode = FlightMode::Hold, bool disarm_after_completion = false);
 
@@ -162,16 +164,20 @@ private:
 
 /**
  * @ingroup auto_apms_px4
- * @brief Helper template class that creates a ModeExecutor for a custom PX4 mode implemented by inheriting from
- * ModeBase.
+ * @brief Helper template class that creates a ModeProxyAction for a custom PX4 mode implemented by inheriting from
+ * ActionDrivenMode.
+ *
+ * Composes a ModeRegistrationHandler, so the mode is registered using the common registration sequence (wait for
+ * FMU, register, announce the name-to-nav_state mapping on the `registered_modes` topic) just like with
+ * ModeRegistrationFactory.
  * @tparam ActionT Type of the ROS 2 action. Must be the same as used by @p ModeT.
  * @tparam ModeT Custom PX4 mode class.
  */
 template <class ActionT, class ModeT>
-class ModeExecutorFactory
+class ModeProxyActionFactory
 {
 public:
-  ModeExecutorFactory(
+  ModeProxyActionFactory(
     const std::string & action_name, const rclcpp::NodeOptions & options,
     VehicleCommandClient::FlightMode deactivation_flight_mode = VehicleCommandClient::FlightMode::Hold,
     bool disarm_after_completion = false);
@@ -179,9 +185,10 @@ public:
   rclcpp::node_interfaces::NodeBaseInterface::SharedPtr get_node_base_interface();
 
 private:
-  rclcpp::Node::SharedPtr node_ptr_;  // It's necessary to also store the node pointer here for successful destruction
-  std::unique_ptr<ModeBase<ActionT>> mode_ptr_;
-  std::shared_ptr<ModeExecutor<ActionT>> mode_executor_ptr_;
+  rclcpp::Node::SharedPtr node_ptr_;
+  std::unique_ptr<ActionDrivenMode<ActionT>> mode_ptr_;
+  ModeRegistrationHandler registration_handler_;
+  std::shared_ptr<ModeProxyAction<ActionT>> mode_proxy_action_ptr_;
 };
 
 // #####################################################################################################################
@@ -189,7 +196,7 @@ private:
 // #####################################################################################################################
 
 template <class ActionT>
-ModeExecutor<ActionT>::ModeExecutor(
+ModeProxyAction<ActionT>::ModeProxyAction(
   const std::string & action_name, rclcpp::Node::SharedPtr node_ptr,
   std::shared_ptr<ActionContextType> action_context_ptr, uint8_t mode_id, FlightMode deactivation_flight_mode,
   bool disarm_after_completion)
@@ -203,7 +210,7 @@ ModeExecutor<ActionT>::ModeExecutor(
 }
 
 template <class ActionT>
-ModeExecutor<ActionT>::ModeExecutor(
+ModeProxyAction<ActionT>::ModeProxyAction(
   const std::string & action_name, const rclcpp::NodeOptions & options, uint8_t mode_id,
   FlightMode deactivation_flight_mode, bool disarm_after_completion)
 : auto_apms_util::ActionWrapper<ActionT>(action_name, options),
@@ -217,16 +224,16 @@ ModeExecutor<ActionT>::ModeExecutor(
 }
 
 template <class ActionT>
-ModeExecutor<ActionT>::ModeExecutor(
+ModeProxyAction<ActionT>::ModeProxyAction(
   const std::string & action_name, const rclcpp::NodeOptions & options, FlightMode flight_mode,
   FlightMode deactivation_flight_mode, bool disarm_after_completion)
-: ModeExecutor<ActionT>(
+: ModeProxyAction<ActionT>(
     action_name, options, static_cast<uint8_t>(flight_mode), deactivation_flight_mode, disarm_after_completion)
 {
 }
 
 template <class ActionT>
-inline bool ModeExecutor<ActionT>::isExternalMode(uint8_t mode_id)
+inline bool ModeProxyAction<ActionT>::isExternalMode(uint8_t mode_id)
 {
   const uint8_t first_external_mode_nav_state = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_EXTERNAL1;
   const uint8_t max_external_mode_nav_state = px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_EXTERNAL8 + 1;
@@ -234,7 +241,7 @@ inline bool ModeExecutor<ActionT>::isExternalMode(uint8_t mode_id)
 }
 
 template <class ActionT>
-void ModeExecutor<ActionT>::setUp()
+void ModeProxyAction<ActionT>::setUp()
 {
   vehicle_status_sub_ptr_ = this->node_ptr_->template create_subscription<px4_msgs::msg::VehicleStatus>(
     "fmu/out/vehicle_status" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleStatus>(),
@@ -257,7 +264,7 @@ void ModeExecutor<ActionT>::setUp()
 }
 
 template <class ActionT>
-auto_apms_util::ActionStatus ModeExecutor<ActionT>::asyncDeactivateFlightMode()
+auto_apms_util::ActionStatus ModeProxyAction<ActionT>::asyncDeactivateFlightMode()
 {
   // If currently waiting for flight mode activation and the deactivation mode is already active, we need to wait for
   // the nav state to change before starting deactivation. Otherwise, we'll misinterpret the current nav state and
@@ -299,7 +306,7 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::asyncDeactivateFlightMode()
 }
 
 template <class ActionT>
-bool ModeExecutor<ActionT>::onGoalRequest(const std::shared_ptr<const Goal> /*goal_ptr*/)
+bool ModeProxyAction<ActionT>::onGoalRequest(const std::shared_ptr<const Goal> /*goal_ptr*/)
 {
   state_ = State::REQUEST_ACTIVATION;
   deactivation_command_sent_ = false;
@@ -309,7 +316,7 @@ bool ModeExecutor<ActionT>::onGoalRequest(const std::shared_ptr<const Goal> /*go
 }
 
 template <class ActionT>
-bool ModeExecutor<ActionT>::onCancelRequest(
+bool ModeProxyAction<ActionT>::onCancelRequest(
   std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Result> /*result_ptr*/)
 {
   RCLCPP_INFO(this->node_ptr_->get_logger(), "Cancellation requested!");
@@ -317,7 +324,7 @@ bool ModeExecutor<ActionT>::onCancelRequest(
 }
 
 template <class ActionT>
-auto_apms_util::ActionStatus ModeExecutor<ActionT>::cancelGoal(
+auto_apms_util::ActionStatus ModeProxyAction<ActionT>::cancelGoal(
   std::shared_ptr<const Goal> /*goal_ptr*/, std::shared_ptr<Result> /*result_ptr*/)
 {
   // The custom mode is responsible for managing the lifecycle of the cancellation via the onGoalCanceled callback.
@@ -355,7 +362,7 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::cancelGoal(
 }
 
 template <class ActionT>
-bool ModeExecutor<ActionT>::isCurrentNavState(uint8_t nav_state)
+bool ModeProxyAction<ActionT>::isCurrentNavState(uint8_t nav_state)
 {
   if (last_vehicle_status_ptr_ && last_vehicle_status_ptr_->nav_state == nav_state) {
     return true;
@@ -364,7 +371,7 @@ bool ModeExecutor<ActionT>::isCurrentNavState(uint8_t nav_state)
 }
 
 template <class ActionT>
-auto_apms_util::ActionStatus ModeExecutor<ActionT>::executeGoal(
+auto_apms_util::ActionStatus ModeProxyAction<ActionT>::executeGoal(
   std::shared_ptr<const Goal> goal_ptr, std::shared_ptr<Feedback> feedback_ptr, std::shared_ptr<Result> /*result_ptr*/)
 {
   switch (state_) {
@@ -439,14 +446,14 @@ auto_apms_util::ActionStatus ModeExecutor<ActionT>::executeGoal(
 }
 
 template <class ActionT>
-bool ModeExecutor<ActionT>::sendActivationCommand(
+bool ModeProxyAction<ActionT>::sendActivationCommand(
   const VehicleCommandClient & client, std::shared_ptr<const Goal> /*goal_ptr*/)
 {
   return client.syncActivateFlightMode(mode_id_);
 }
 
 template <class ActionT>
-bool ModeExecutor<ActionT>::isCompleted(
+bool ModeProxyAction<ActionT>::isCompleted(
   std::shared_ptr<const Goal> /*goal_ptr*/, const px4_msgs::msg::VehicleStatus & /*vehicle_status*/)
 {
   if (!mode_completed_result_.has_value()) {
@@ -464,59 +471,43 @@ bool ModeExecutor<ActionT>::isCompleted(
 }
 
 template <class ActionT>
-void ModeExecutor<ActionT>::setFeedback(
+void ModeProxyAction<ActionT>::setFeedback(
   std::shared_ptr<Feedback> /*feedback_ptr*/, const px4_msgs::msg::VehicleStatus & /*vehicle_status*/)
 {
   return;
 }
 
 template <class ActionT>
-uint8_t ModeExecutor<ActionT>::getModeID() const
+uint8_t ModeProxyAction<ActionT>::getModeID() const
 {
   return mode_id_;
 }
 
 template <class ActionT, class ModeT>
-ModeExecutorFactory<ActionT, ModeT>::ModeExecutorFactory(
+ModeProxyActionFactory<ActionT, ModeT>::ModeProxyActionFactory(
   const std::string & action_name, const rclcpp::NodeOptions & options,
   VehicleCommandClient::FlightMode deactivation_flight_mode, bool disarm_after_completion)
-: node_ptr_(std::make_shared<rclcpp::Node>(action_name + "_node", options))
+: node_ptr_(std::make_shared<rclcpp::Node>(action_name + "_node", options)), registration_handler_(node_ptr_)
 {
   static_assert(
-    std::is_base_of<ModeBase<ActionT>, ModeT>::value,
-    "Template argument ModeT must inherit auto_apms::ModeBase<ActionT> as public and with same type "
-    "ActionT as auto_apms::ActionWrapper<ActionT>");
+    std::is_base_of<ActionDrivenMode<ActionT>, ModeT>::value,
+    "Template argument ModeT must inherit auto_apms_px4::ActionDrivenMode<ActionT> as public and with same type "
+    "ActionT as auto_apms_util::ActionWrapper<ActionT>");
 
   const auto action_context_ptr = std::make_shared<auto_apms_util::ActionContext<ActionT>>(node_ptr_->get_logger());
 
   mode_ptr_ = std::make_unique<ModeT>(*node_ptr_, px4_ros2::ModeBase::Settings(action_name), action_context_ptr);
 
-  constexpr int max_retries = 5;
-  bool fmu_available = false;
-  for (int attempt = 0; attempt < max_retries; ++attempt) {
-    if (px4_ros2::waitForFMU(*node_ptr_, std::chrono::seconds(3))) {
-      fmu_available = true;
-      RCLCPP_DEBUG(node_ptr_->get_logger(), "FMU availability test successful (attempt %d).", attempt + 1);
-      break;
-    }
-    RCLCPP_WARN(node_ptr_->get_logger(), "No message from FMU (attempt %d/%d). Retrying...", attempt + 1, max_retries);
-  }
-  if (!fmu_available) {
-    throw std::runtime_error("No message from FMU after multiple attempts");
-  }
+  // Wait for the FMU, register the mode and announce its name-to-nav_state mapping.
+  registration_handler_.registerMode(*mode_ptr_, action_name);
 
-  if (!mode_ptr_->doRegister()) {
-    RCLCPP_FATAL(node_ptr_->get_logger(), "Registration of mode with action_name: '%s' failed.", action_name.c_str());
-    throw std::runtime_error("Mode registration failed");
-  }
-
-  // AFTER (!) registration, the mode id can be queried to set up the executor
-  mode_executor_ptr_ = std::make_shared<ModeExecutor<ActionT>>(
+  // AFTER (!) registration, the mode id can be queried to set up the proxy action
+  mode_proxy_action_ptr_ = std::make_shared<ModeProxyAction<ActionT>>(
     action_name, node_ptr_, action_context_ptr, mode_ptr_->id(), deactivation_flight_mode, disarm_after_completion);
 }
 
 template <class ActionT, class ModeT>
-rclcpp::node_interfaces::NodeBaseInterface::SharedPtr ModeExecutorFactory<ActionT, ModeT>::get_node_base_interface()
+rclcpp::node_interfaces::NodeBaseInterface::SharedPtr ModeProxyActionFactory<ActionT, ModeT>::get_node_base_interface()
 {
   return node_ptr_->get_node_base_interface();
 }

@@ -14,16 +14,16 @@
 
 #include "auto_apms_px4_interfaces/action/mission.hpp"
 
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 
 namespace auto_apms_px4
 {
 
-class MissionSkill : public ModeExecutor<auto_apms_px4_interfaces::action::Mission>
+class MissionSkill : public ModeProxyAction<auto_apms_px4_interfaces::action::Mission>
 {
 public:
   explicit MissionSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutor{_AUTO_APMS_PX4__MISSION_ACTION_NAME, options, FlightMode::Mission}
+  : ModeProxyAction{_AUTO_APMS_PX4__MISSION_ACTION_NAME, options, FlightMode::Mission}
   {
   }
 

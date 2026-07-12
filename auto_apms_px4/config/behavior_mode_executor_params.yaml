@@ -1,0 +1,53 @@
+auto_apms_px4::behavior_mode_executor_params:
+  activation:
+    type: string
+    default_value: armed
+    read_only: true
+    description: "When the FMU may activate the executor (armed | always | immediately)."
+    validation:
+      one_of<>: [["armed", "always", "immediately"]]
+
+  mode_name:
+    type: string
+    default_value: "AutoAPMS Behavior"
+    read_only: true
+    description: "Registered name of the owned PX4 mode (the selectable mode that puts the executor in charge)."
+
+  on_completion:
+    type: string
+    default_value: hold
+    read_only: true
+    description: "In-charge reaction after the behavior succeeds (hold | rtl | land | disarm | complete | none)."
+    validation:
+      one_of<>: [["hold", "rtl", "land", "disarm", "complete", "none"]]
+
+  on_failure:
+    type: string
+    default_value: rtl
+    read_only: true
+    description: "In-charge reaction after the behavior fails (hold | rtl | land | disarm | complete | none)."
+    validation:
+      one_of<>: [["hold", "rtl", "land", "disarm", "complete", "none"]]
+
+  defer_failsafes:
+    type: bool
+    default_value: false
+    read_only: true
+    description: "Defer FMU failsafes while a behavior is running (in-charge privilege)."
+
+  behavior:
+    build_request:
+      type: string
+      default_value: ""
+      read_only: true
+      description: "Behavior build request executed when the executor is put in charge (must not be empty)."
+    entry_point:
+      type: string
+      default_value: ""
+      read_only: true
+      description: "Single point of entry for behavior execution."
+    node_manifest:
+      type: string
+      default_value: ""
+      read_only: true
+      description: "Encoded node manifest specifying additional behavior tree nodes to load."

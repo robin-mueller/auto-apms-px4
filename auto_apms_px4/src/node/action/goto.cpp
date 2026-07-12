@@ -30,7 +30,7 @@
 #define INPUT_KEY_REACHED_THRESH_VEL "reached_thresh_vel"
 #define INPUT_KEY_REACHED_THRESH_YAW "reached_thresh_yaw"
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 class GoToAction : public auto_apms_behavior_tree::core::RosActionNode<auto_apms_px4_interfaces::action::GoTo>
@@ -203,6 +203,6 @@ public:
   }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::GoToAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::GoToAction)

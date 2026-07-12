@@ -20,7 +20,7 @@
 #define INPUT_KEY_USE_AMSL "use_amsl"
 #define INPUT_KEY_HEADING "heading"
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 class TakeoffAction : public auto_apms_behavior_tree::core::RosActionNode<auto_apms_px4_interfaces::action::Takeoff>
@@ -52,6 +52,6 @@ public:
   }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::TakeoffAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::TakeoffAction)

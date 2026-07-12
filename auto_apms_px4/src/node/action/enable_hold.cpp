@@ -16,7 +16,7 @@
 
 #include "auto_apms_behavior_tree_core/node.hpp"
 
-namespace auto_apms_px4_behavior
+namespace auto_apms_px4
 {
 
 class EnableHoldAction
@@ -28,6 +28,6 @@ public:
   static BT::PortsList providedPorts() { return {}; }
 };
 
-}  // namespace auto_apms_px4_behavior
+}  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4_behavior::EnableHoldAction)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::EnableHoldAction)

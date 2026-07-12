@@ -14,17 +14,17 @@
 
 #include "auto_apms_px4_interfaces/action/land.hpp"
 
-#include "auto_apms_px4/mode_executor.hpp"
+#include "auto_apms_px4/mode_proxy_action.hpp"
 #include "px4_ros2/vehicle_state/land_detected.hpp"
 
 namespace auto_apms_px4
 {
 
-class LandSkill : public ModeExecutor<auto_apms_px4_interfaces::action::Land>
+class LandSkill : public ModeProxyAction<auto_apms_px4_interfaces::action::Land>
 {
 public:
   explicit LandSkill(const rclcpp::NodeOptions & options)
-  : ModeExecutor(_AUTO_APMS_PX4__LAND_ACTION_NAME, options, FlightMode::Land)
+  : ModeProxyAction(_AUTO_APMS_PX4__LAND_ACTION_NAME, options, FlightMode::Land)
   {
     px4_ros2::Context context(*node_ptr_, "");
     land_detected_ptr_ = std::make_unique<px4_ros2::LandDetected>(context);
@@ -41,7 +41,7 @@ private:
     std::shared_ptr<const Goal> goal_ptr, const px4_msgs::msg::VehicleStatus & vehicle_status) override final
   {
     return (land_detected_ptr_->lastValid(std::chrono::seconds(3)) && land_detected_ptr_->landed()) ||
-           ModeExecutor::isCompleted(goal_ptr, vehicle_status);
+           ModeProxyAction::isCompleted(goal_ptr, vehicle_status);
   }
 
   std::unique_ptr<px4_ros2::LandDetected> land_detected_ptr_;

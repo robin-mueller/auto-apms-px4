@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <!--
+    Behavior for switching into a custom (external) PX4 mode by name and returning once it is active.
+
+    Unlike the builtin modes, a custom mode's nav_state is assigned dynamically by PX4 during registration, so it
+    cannot be hard-coded. GetModeNavState resolves the nav_state from the mode's name via the 'registered_modes'
+    topic (announced by the auto_apms_px4 mode registration factories), after which the same request-and-wait
+    pattern used for builtin modes applies. Pass the registered mode name through the 'mode_name' port.
+  -->
+  <BehaviorTree ID="SwitchToNamedModeAndWait">
+    <Sequence>
+      <RetryUntilSuccessful num_attempts="-1">
+        <GetModeNavState mode_name="{mode_name}"
+                         nav_state="{nav_state}"/>
+      </RetryUntilSuccessful>
+      <SwitchMode nav_state="{nav_state}"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckNavState nav_state="{nav_state}"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Action ID="SwitchMode">
+      <input_port name="nav_state"
+                  type="int">Target PX4 navigation state (mode id) to switch to.</input_port>
+    </Action>
+    <Condition ID="CheckNavState">
+      <input_port name="nav_state"
+                  type="int">Expected PX4 navigation state (mode id) the vehicle should be in.</input_port>
+    </Condition>
+    <Condition ID="GetModeNavState">
+      <input_port name="mode_name"
+                  type="std::string">Name of the registered PX4 mode to resolve.</input_port>
+      <output_port name="nav_state"
+                   type="int">Resolved PX4 navigation state (mode id) of the named mode.</output_port>
+    </Condition>
+  </TreeNodesModel>
+
+</root>
