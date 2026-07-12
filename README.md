@@ -23,12 +23,12 @@ It builds on the [PX4/ROS 2 Control Interface](https://docs.px4.io/main/en/ros2/
 >
 > The dependency versions are pinned for CI inside [dependencies.repos](./dependencies.repos) and should be used for local development as well.
 
-## What's in this package
+## What's inside?
 
 - **Custom mode infrastructure**: base classes and composable helpers for writing, registering and deploying custom PX4 modes. See [Writing custom modes](#writing-custom-px4-modes) below.
-- **Skills**: ready-to-use `rclcpp_components` nodes that wrap the common standard PX4 modes as ROS 2 action servers. Bring them up with [`launch/skills_launch.py`](launch/skills_launch.py).
+- **Skills**: ready-to-use `rclcpp_components` nodes that wrap the common standard PX4 modes as ROS 2 action servers. Bring them up with [`launch/skills_launch.py`](auto_apms_px4/launch/skills_launch.py).
 - **Behavior tree nodes**: plugins for orchestrating PX4 from a behavior tree, exported under the node manifest alias `auto_apms_px4::behavior_tree_nodes`. The full port-level reference is published in the guide: [Behavior Tree Nodes › auto_apms_px4](https://autoapms.github.io/auto-apms-guide/reference/behavior-tree-nodes#overview-auto-apms-px4).
-- **Behavior mode executor**: a PX4 mode executor that runs an AutoAPMS behavior in-process when put in charge by the FMU. Configured entirely via ROS 2 parameters; see [`config/behavior_mode_executor_params.yaml`](config/behavior_mode_executor_params.yaml) and [`launch/behavior_mode_executor_launch.py`](launch/behavior_mode_executor_launch.py).
+- **Behavior mode executor**: a PX4 mode executor that runs an AutoAPMS behavior in-process when put in charge by the FMU. Configured entirely via ROS 2 parameters; see [`config/behavior_mode_executor_params.yaml`](auto_apms_px4/config/behavior_mode_executor_params.yaml) and [`launch/behavior_mode_executor_launch.py`](auto_apms_px4/launch/behavior_mode_executor_launch.py).
 
 ## Writing custom PX4 modes
 
@@ -42,7 +42,7 @@ dynamically assigned `nav_state` on the `registered_modes` topic so behaviors ca
 | `ModeProxyActionFactory<ActionT, ModeT>` | `auto_apms_px4::ActionDrivenMode<ActionT>` | By sending a goal to the ROS 2 action server the factory creates | A mode driven by a request with a goal/feedback/result (a "skill") |
 
 Under the hood both compose a
-[`ModeRegistrationHandler`](include/auto_apms_px4/mode_registration.hpp), which owns the registration sequence (wait
+[`ModeRegistrationHandler`](auto_apms_px4/include/auto_apms_px4/mode_registration.hpp), which owns the registration sequence (wait
 for FMU → register → announce). You can also use `ModeRegistrationHandler` directly if you manage the mode's lifetime
 yourself.
 
@@ -136,7 +136,7 @@ public:
 RCLCPP_COMPONENTS_REGISTER_NODE(my_pkg::MySkill)
 ```
 
-The skill sources under [`src/skill/`](src/skill) are complete, working examples of this pattern.
+The skill sources under [`src/skill/`](auto_apms_px4/src/skill) are complete, working examples of this pattern.
 
 ### Deployment convention
 
@@ -158,5 +158,5 @@ Then run them with `ros2 run rclcpp_components component_container` + `ros2 comp
 
 ## Further reading
 
-- [PX4 integration concept](https://autoapms.github.io/auto-apms-guide/concept/px4-integration).
-- [Behavior tree node reference](https://autoapms.github.io/auto-apms-guide/reference/behavior-tree-nodes#overview-auto-apms-px4).
+- [PX4 integration concept](https://autoapms.github.io/auto-apms-guide/concept/px4-integration)
+- [Behavior tree node reference](https://autoapms.github.io/auto-apms-guide/reference/behavior-tree-nodes#overview-auto-apms-px4)
