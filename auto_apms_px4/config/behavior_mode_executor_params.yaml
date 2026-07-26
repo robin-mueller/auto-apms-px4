@@ -13,41 +13,40 @@ auto_apms_px4::behavior_mode_executor_params:
     read_only: true
     description: "Registered name of the owned PX4 mode (the selectable mode that puts the executor in charge)."
 
+  # Dynamic parameter: changes take effect on the next activation (when the executor is next put in charge).
   on_completion:
     type: string
-    default_value: hold
-    read_only: true
-    description: "In-charge reaction after the behavior succeeds (hold | rtl | land | disarm | complete | none)."
+    default_value: complete
+    description: "In-charge reaction after the behavior succeeds (hold | rtl | land | disarm | complete | none). Applied on the next activation."
     validation:
       one_of<>: [["hold", "rtl", "land", "disarm", "complete", "none"]]
 
+  # Dynamic parameter: changes take effect on the next activation (when the executor is next put in charge).
   on_failure:
     type: string
-    default_value: rtl
-    read_only: true
-    description: "In-charge reaction after the behavior fails (hold | rtl | land | disarm | complete | none)."
+    default_value: hold
+    description: "In-charge reaction after the behavior fails (hold | rtl | land | disarm | complete | none). Applied on the next activation."
     validation:
       one_of<>: [["hold", "rtl", "land", "disarm", "complete", "none"]]
 
+  # Dynamic parameter: changes take effect on the next activation (when the executor is next put in charge).
   defer_failsafes:
     type: bool
     default_value: false
-    read_only: true
-    description: "Defer FMU failsafes while a behavior is running (in-charge privilege)."
+    description: "Defer FMU failsafes while a behavior is running (in-charge privilege). Applied on the next activation."
 
+  # Dynamic parameters: which behavior to run. Changes take effect on the next activation (when the executor is next
+  # put in charge); the currently running behavior is not affected.
   behavior:
     build_request:
       type: string
       default_value: ""
-      read_only: true
-      description: "Behavior build request executed when the executor is put in charge (must not be empty)."
+      description: "Behavior build request executed when the executor is put in charge (must not be empty). Applied on the next activation."
     entry_point:
       type: string
       default_value: ""
-      read_only: true
-      description: "Single point of entry for behavior execution."
+      description: "Single point of entry for behavior execution. Applied on the next activation."
     node_manifest:
       type: string
       default_value: ""
-      read_only: true
-      description: "Encoded node manifest specifying additional behavior tree nodes to load."
+      description: "Encoded node manifest specifying additional behavior tree nodes to load. Applied on the next activation."

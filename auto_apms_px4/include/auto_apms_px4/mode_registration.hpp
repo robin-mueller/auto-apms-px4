@@ -115,7 +115,7 @@ private:
  *
  * Use this to bring up a custom mode (a `px4_ros2::ModeBase` subclass constructible from `(rclcpp::Node &,
  * px4_ros2::ModeBase::Settings)`) that is meant to be activated declaratively from a behavior tree via the
- * `SwitchMode` node - as opposed to ModeProxyActionFactory, which drives a mode through a ROS 2 action.
+ * `SendCmdSetNavState` node - as opposed to ModeProxyActionFactory, which drives a mode through a ROS 2 action.
  *
  * On construction it instantiates the mode and delegates the registration sequence (wait for FMU, register, announce)
  * to a ModeRegistrationHandler. Multiple factories can be composed into a single process through `rclcpp_components`;

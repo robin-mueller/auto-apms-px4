@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4"
+      main_tree_to_execute="TakeoffAndLand">
+
+  <!--
+    Example behavior for the BehaviorModeExecutor.
+
+    It simply takes off and immediately lands again, reusing the DoTakeoff and DoLanding subtrees defined in
+    behavior/vehicle_command.xml. Rather than duplicating them, we pull them in with <include> elements. The 'autoapms'
+    attribute takes a registered tree resource identity (<package>::<file_stem>::<tree_name>) and is resolved through
+    the AutoAPMS resource system, so it needs no knowledge of any install location. Each autoapms include cherry-picks
+    the individual tree named by the identity plus the trees it depends on (e.g. DoTakeoff also brings SetModeTakeoff
+    and SwitchModeAndWait), so we include the two behaviors we actually use here explicitly. A helper shared by both
+    (SwitchModeAndWait) is merged only once.
+  -->
+  <include autoapms="auto_apms_px4::vehicle_command::DoTakeoff"/>
+  <include autoapms="auto_apms_px4::vehicle_command::DoLanding"/>
+
+  <BehaviorTree ID="TakeoffAndLand">
+    <Sequence>
+      <SubTree ID="DoTakeoff"/>
+      <SubTree ID="DoLanding"/>
+    </Sequence>
+  </BehaviorTree>
+
+</root>

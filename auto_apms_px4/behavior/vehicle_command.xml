@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4">
+  <!--
+    Behaviors built on top of the PX4 VehicleCommand message.
+
+    Naming convention:
+      Set*  - request a state and wait until it is *reflected* by the vehicle (mode active, armed/disarmed, ...). These
+              only confirm the state was entered; they do not wait for any maneuver to finish.
+      Do*   - actually perform a maneuver and wait until its *execution completes*, using PX4's 'mode_completed' signal.
+
+    The nav_state values match px4_msgs/msg/VehicleStatus:
+      2  = POSCTL (Position)    3  = AUTO_MISSION (Mission)   4  = AUTO_LOITER (Hold)
+      5  = AUTO_RTL (RTL)      17  = AUTO_TAKEOFF (Takeoff)  18  = AUTO_LAND (Land)
+  -->
+
+  <!-- ============================ Reusable helpers ============================ -->
+
+  <!-- Request the mode given by the 'nav_state' port and wait until it becomes active. -->
+  <BehaviorTree ID="SwitchModeAndWait">
+    <Sequence>
+      <SendCmdSetNavState nav_state="{nav_state}"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckNavState nav_state="{nav_state}"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <!--
+    Switch into a custom (external) PX4 mode by name and return once it is active. A custom mode's nav_state is assigned
+    dynamically by PX4 during registration, so GetModeNavState first resolves it from the mode's name via the
+    'registered_modes' topic, after which the same request-and-wait pattern as for builtin modes applies.
+  -->
+  <BehaviorTree ID="SwitchToNamedModeAndWait">
+    <Sequence>
+      <RetryUntilSuccessful num_attempts="-1">
+        <GetModeNavState mode_name="{mode_name}"
+                         nav_state="{nav_state}"/>
+      </RetryUntilSuccessful>
+      <SubTree ID="SwitchModeAndWait"
+               nav_state="{nav_state}"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- ===================== Set behaviors (set state and wait) ===================== -->
+
+  <BehaviorTree ID="SetModeHold">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="4"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SetModeRTL">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="5"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SetModeLand">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="18"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SetModeTakeoff">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="17"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SetModePosition">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="2"/>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SetModeMission">
+    <SubTree ID="SwitchModeAndWait"
+             nav_state="3"/>
+  </BehaviorTree>
+
+  <!-- Arm and wait until the vehicle reports ARMED (arming_state 2). -->
+  <BehaviorTree ID="SetArm">
+    <Sequence>
+      <SendVehicleCommand command="400"
+                          param1="1"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckArmingState arming_state="2"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Disarm and wait until the vehicle reports DISARMED (arming_state 1). -->
+  <BehaviorTree ID="SetDisarm">
+    <Sequence>
+      <SendVehicleCommand command="400"
+                          param1="0"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckArmingState arming_state="1"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <!--
+    Set a PX4 firmware parameter via VEHICLE_CMD_DO_SET_PARAMETER (180). Caution: this command addresses the parameter
+    by its numeric enumeration value (index), NOT by name. The target index/value are taken from the blackboard
+    parameters 'bb.param_number' and 'bb.param_value'. PX4 does not emit a per-parameter completion signal for this
+    command, so this behavior returns once the command has been published.
+  -->
+  <BehaviorTree ID="SetPx4Param">
+    <Sequence name="GetParameters">
+      <HasParameter parameter="bb.param_number"
+                    node=""/>
+      <HasParameter parameter="bb.param_value"
+                    node=""/>
+      <SendVehicleCommand command="180"
+                          param1="{@param_number}"
+                          param2="{@param_value}"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!--
+    Set a waypoint to a specific global WGS84 location using PX4's built-in reposition (VEHICLE_CMD_DO_REPOSITION, 192). The target
+    is taken from the blackboard parameters 'lat' [°], 'lon' [°] and 'alt' [m, AMSL]; the optional 'yaw' [°]
+    sets the target heading (clockwise from north) and, if omitted, the current heading mode is kept. This only issues a
+    single reposition command and does not wait for arrival - PX4 switches into Reposition mode and flies there.
+  -->
+  <BehaviorTree ID="SetGlobalGoTo">
+    <SendCmdDoReposition latitude="{lat}"
+                  longitude="{lon}"
+                  altitude="{alt}"
+                  yaw="{yaw}"/>
+  </BehaviorTree>
+
+  <!-- ================= Do behaviors (execute and wait for completion) ================= -->
+
+  <!-- Switch into Takeoff mode and wait until PX4 signals the takeoff maneuver has completed (nav_state 17). -->
+  <BehaviorTree ID="DoTakeoff">
+    <Sequence>
+      <SubTree ID="SetModeTakeoff"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckModeCompleted nav_state="17"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Switch into Land mode and wait until PX4 signals the landing maneuver has completed (nav_state 18). -->
+  <BehaviorTree ID="DoLanding">
+    <Sequence>
+      <SubTree ID="SetModeLand"/>
+      <RetryUntilSuccessful num_attempts="-1">
+        <CheckModeCompleted nav_state="18"/>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+</root>

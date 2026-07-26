@@ -14,7 +14,7 @@
 
 #include <cstdint>
 
-#include "auto_apms_px4/send_vehicle_command.hpp"
+#include "auto_apms_px4/node/send_vehicle_command.hpp"
 
 #define INPUT_KEY_NAV_STATE "nav_state"
 
@@ -36,16 +36,16 @@ namespace auto_apms_px4
  * does not wait for the vehicle to actually enter the requested mode. Pair it with %CheckNavState to wait for the
  * transition to complete.
  */
-class SwitchMode : public SendVehicleCommand
+class SendCmdSetNavState : public SendVehicleCommand
 {
 public:
   using SendVehicleCommand::SendVehicleCommand;
 
   static BT::PortsList providedPorts()
   {
-    return providedBasicPorts({
+    return {
       BT::InputPort<int>(INPUT_KEY_NAV_STATE, "Target PX4 navigation state (mode id) to switch to."),
-    });
+    };
   }
 
   bool setMessage(px4_msgs::msg::VehicleCommand & msg) override final
@@ -73,4 +73,4 @@ public:
 
 }  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::SwitchMode)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::SendCmdSetNavState)

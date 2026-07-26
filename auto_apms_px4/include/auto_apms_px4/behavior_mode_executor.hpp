@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -84,7 +85,7 @@ private:
  * The behavior itself is built from standard AutoAPMS nodes and drives the vehicle through the regular PX4 skills.
  * Before starting, the executor publishes its `VehicleCommand` source component on the global blackboard (under the
  * key configured via the `AUTO_APMS_PX4_SOURCE_COMPONENT_GLOBAL_KEY` compile definition) so that ownership-aware
- * nodes (e.g. `%SwitchMode`) can attribute their commands to the executor.
+ * nodes (e.g. `%SendCmdSetNavState`) can attribute their commands to the executor.
  */
 class BehaviorModeExecutor : public px4_ros2::ModeExecutorBase
 {
@@ -114,12 +115,14 @@ public:
    * @brief Constructor.
    * @param owned_mode Placeholder mode owned by this executor.
    * @param settings PX4 mode executor settings (activation policy).
-   * @param config Behavior specification and completion reactions.
+   * @param config_provider Callable returning the current Config. It is invoked once here and again at the start of
+   *   every activation so runtime parameter changes take effect on the next run (see onActivate). It must stay valid
+   *   for the lifetime of this executor and is expected to keep any underlying parameter listener alive.
    * @param engine In-process behavior tree executor used to run the behavior.
    */
   BehaviorModeExecutor(
-    BehaviorOwnedMode & owned_mode, const px4_ros2::ModeExecutorBase::Settings & settings, const Config & config,
-    auto_apms_behavior_tree::GenericTreeExecutorNode & engine);
+    BehaviorOwnedMode & owned_mode, const px4_ros2::ModeExecutorBase::Settings & settings,
+    std::function<Config()> config_provider, auto_apms_behavior_tree::GenericTreeExecutorNode & engine);
 
   void onActivate() override;
   void onDeactivate(DeactivateReason reason) override;
@@ -140,23 +143,22 @@ public:
   void onExecutionResult(ExecutionResult result);
 
 private:
-  void onBehaviorTerminated(px4_ros2::Result result);
-  void performReaction(CompletionReaction reaction, px4_ros2::Result result);
+  void performReaction(CompletionReaction reaction, ExecutionResult result);
 
   /**
    * @brief Schedule the builtin PX4 Loiter mode.
    *
    * Loiter is the vehicle-type-aware hold mode (position hold for multicopters, orbit for fixed-wing), making it the
-   * safe way to hold for both airframes. Scheduling it also prevents the owned placeholder mode from becoming the
-   * active setpoint source while the executor is in charge.
-   * @param on_completed Callback forwarded to px4_ros2::ModeExecutorBase::scheduleMode.
+   * safe way to hold for both airframes. It has no completion signal, so this schedule method takes no on_completed
+   * callback.
    */
-  void scheduleLoiter(const px4_ros2::ModeExecutorBase::CompletedCallback & on_completed);
+  void scheduleLoiter();
 
   rclcpp::Node & node_;
   BehaviorOwnedMode & owned_mode_;
   auto_apms_behavior_tree::GenericTreeExecutorNode & behavior_executor_;
-  const Config config_;
+  std::function<Config()> config_provider_;
+  Config config_;  ///< Snapshot of the configuration, refreshed from config_provider_ on each activation.
 };
 
 /**
@@ -164,13 +166,16 @@ private:
  * @brief ROS 2 component that hosts a BehaviorModeExecutor and its owned mode on an in-process behavior tree executor
  * node.
  *
- * Configuration is entirely parameter driven:
- * - `activation` (string): `armed`, `always` or `immediately` (see px4_ros2::ModeExecutorBase::Settings::Activation).
- * - `mode_name` (string): Registered name of the owned PX4 mode.
- * - `on_completion` / `on_failure` (string): Reaction after the behavior succeeds/fails
+ * Configuration is entirely parameter driven. Registration-time parameters are read once here in the constructor and
+ * are declared read only; the remaining parameters are dynamic and re-read on each activation, so they can be changed
+ * at runtime (e.g. via `ros2 param set`) and take effect the next time the executor is put in charge:
+ * - `activation` (string, read only): `armed`, `always` or `immediately`
+ *   (see px4_ros2::ModeExecutorBase::Settings::Activation). Latched at mode registration.
+ * - `mode_name` (string, read only): Registered name of the owned PX4 mode. Latched at mode registration.
+ * - `on_completion` / `on_failure` (string, dynamic): Reaction after the behavior succeeds/fails
  *   (`hold`, `rtl`, `land`, `disarm`, `complete`, `none`).
- * - `defer_failsafes` (bool): Defer FMU failsafes while a behavior is running.
- * - `behavior.build_request` / `behavior.entry_point` / `behavior.node_manifest`: Which behavior to run.
+ * - `defer_failsafes` (bool, dynamic): Defer FMU failsafes while a behavior is running.
+ * - `behavior.build_request` / `behavior.entry_point` / `behavior.node_manifest` (dynamic): Which behavior to run.
  * - `build_handler` (string), `tick_rate` (double), `groot2_port` (int): Standard behavior tree executor parameters
  *   consumed via inherited GenericTreeExecutorNode.
  *
@@ -180,7 +185,7 @@ private:
  * Registration with the FMU (a blocking operation) happens in the constructor and is delegated to a
  * ModeRegistrationHandler. Unlike a plain mode registered via ModeRegistrationFactory, the owned mode is not
  * announced on the `registered_modes` topic: a mode executor cannot be put in charge by another mode executor, so it
- * is not a target for `SwitchMode`-based orchestration from a behavior tree. Mode executors instead serve as a
+ * is not a target for `SendCmdSetNavState`-based orchestration from a behavior tree. Mode executors instead serve as a
  * mechanism to trigger automation from PX4 itself (RC switch, GCS, `ActivateImmediately`); native ROS 2
  * orchestration should activate modes directly.
  */

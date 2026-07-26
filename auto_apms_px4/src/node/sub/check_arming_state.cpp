@@ -19,28 +19,28 @@
 #include "px4_msgs/msg/vehicle_status.hpp"
 #include "px4_ros2/utils/message_version.hpp"
 
-#define INPUT_KEY_NAV_STATE "nav_state"
+#define INPUT_KEY_ARMING_STATE "arming_state"
 
 namespace auto_apms_px4
 {
 
 /**
  * @ingroup auto_apms_px4
- * @brief Condition node that succeeds once the vehicle's active PX4 navigation state matches the expected one.
+ * @brief Condition node that succeeds once the vehicle's arming state matches the expected one.
  *
- * Subscribes to `fmu/out/vehicle_status` (message version suffix resolved at runtime) and compares the currently
- * active `nav_state` against the `nav_state`
- * input port. Returns SUCCESS if they match, otherwise FAILURE (also while no vehicle status has been received yet).
+ * Subscribes to `fmu/out/vehicle_status` (message version suffix resolved at runtime) and compares the current
+ * `arming_state` against the `arming_state` input port (px4_msgs::msg::VehicleStatus::ARMING_STATE_*: 1 = DISARMED,
+ * 2 = ARMED). Returns SUCCESS if they match, otherwise FAILURE (also while no vehicle status has been received yet).
  *
- * Wrap this node in a retry decorator (e.g. `RetryUntilSuccessful`) to wait for a commanded mode change - issued by
- * %SendCmdSetNavState or %SendVehicleCommand - to actually take effect on the vehicle.
+ * Wrap this node in a retry decorator to wait for an arm/disarm command - issued via %SendVehicleCommand
+ * (VEHICLE_CMD_COMPONENT_ARM_DISARM) - to actually take effect on the vehicle (see the SetArm/SetDisarm behaviors).
  */
-class CheckNavState : public auto_apms_behavior_tree::core::RosSubscriberNode<px4_msgs::msg::VehicleStatus>
+class CheckArmingState : public auto_apms_behavior_tree::core::RosSubscriberNode<px4_msgs::msg::VehicleStatus>
 {
   std::shared_ptr<px4_msgs::msg::VehicleStatus> last_msg_;
 
 public:
-  CheckNavState(
+  CheckArmingState(
     const std::string & instance_name, const BT::NodeConfig & config,
     const auto_apms_behavior_tree::core::RosNodeContext & context)
   : RosSubscriberNode{instance_name, config, context, rclcpp::SensorDataQoS{}}
@@ -54,7 +54,8 @@ public:
   static BT::PortsList providedPorts()
   {
     return providedBasicPorts({
-      BT::InputPort<int>(INPUT_KEY_NAV_STATE, "Expected PX4 navigation state (mode id) the vehicle should be in."),
+      BT::InputPort<int>(
+        INPUT_KEY_ARMING_STATE, "Expected PX4 arming state the vehicle should be in (1 = disarmed, 2 = armed)."),
     });
   }
 
@@ -62,22 +63,22 @@ public:
   {
     if (last_msg_ptr) last_msg_ = last_msg_ptr;
 
-    // No vehicle status received yet - the mode cannot be confirmed.
+    // No vehicle status received yet - the arming state cannot be confirmed.
     if (!last_msg_) return BT::NodeStatus::FAILURE;
 
-    const BT::Expected<int> expected_nav_state = getInput<int>(INPUT_KEY_NAV_STATE);
-    if (!expected_nav_state) {
+    const BT::Expected<int> expected_arming_state = getInput<int>(INPUT_KEY_ARMING_STATE);
+    if (!expected_arming_state) {
       RCLCPP_ERROR(
         logger_, "%s - Missing required input '%s': %s", context_.getFullyQualifiedTreeNodeName(this).c_str(),
-        INPUT_KEY_NAV_STATE, expected_nav_state.error().c_str());
+        INPUT_KEY_ARMING_STATE, expected_arming_state.error().c_str());
       return BT::NodeStatus::FAILURE;
     }
 
-    return last_msg_->nav_state == static_cast<uint8_t>(expected_nav_state.value()) ? BT::NodeStatus::SUCCESS
-                                                                                    : BT::NodeStatus::FAILURE;
+    return last_msg_->arming_state == static_cast<uint8_t>(expected_arming_state.value()) ? BT::NodeStatus::SUCCESS
+                                                                                          : BT::NodeStatus::FAILURE;
   }
 };
 
 }  // namespace auto_apms_px4
 
-AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::CheckNavState)
+AUTO_APMS_BEHAVIOR_TREE_REGISTER_NODE(auto_apms_px4::CheckArmingState)

@@ -1,18 +1,3 @@
-Arm:
-  class_name: ${PROJECT_NAME}::ArmAction
-  description: "Arms the vehicle, making it ready for takeoff"
-  topic: arm_disarm
-
-Disarm:
-  class_name: ${PROJECT_NAME}::DisarmAction
-  description: "Disarms the vehicle if it is landed"
-  topic: arm_disarm
-
-EnableHold:
-  class_name: ${PROJECT_NAME}::EnableHoldAction
-  description: "Enables or disables the position loiter mode"
-  topic: enable_hold
-
 GoTo:
   class_name: ${PROJECT_NAME}::GoToAction
   description: "Commands the vehicle to go to a specified position. The reference frame can be set via the 'frame' input port"
@@ -32,34 +17,20 @@ GoToGlobal:
   port_default:
     frame: global
 
-Land:
-  class_name: ${PROJECT_NAME}::LandAction
-  description: "Commands the vehicle to land at its current position"
-  topic: land
-
-Mission:
-  class_name: ${PROJECT_NAME}::MissionAction
-  description: "Starts a mission that has been previously uploaded to the vehicle"
-  topic: mission
-
-RTL:
-  class_name: ${PROJECT_NAME}::RTLAction
-  description: "Commands the vehicle to return to its home position and land"
-  topic: rtl
-
-Takeoff:
-  class_name: ${PROJECT_NAME}::TakeoffAction
-  description: "Commands the vehicle to take off to a specified altitude"
-  topic: takeoff
-
 SendVehicleCommand:
   class_name: ${PROJECT_NAME}::SendVehicleCommand
   description: "Publishes a raw PX4 VehicleCommand (command id + param1..param7) while respecting mode-executor ownership"
   # The topic (incl. its message version suffix) is resolved in the node implementation, see SendVehicleCommand.
+  request_timeout: 3.0 # Ack timeout is inferred from the `request_timeout` field of the node registration options.
 
-SwitchMode:
-  class_name: ${PROJECT_NAME}::SwitchMode
+SendCmdSetNavState:
+  class_name: ${PROJECT_NAME}::SendCmdSetNavState
   description: "Switches the active PX4 flight mode (by nav_state) while respecting mode-executor ownership"
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see SendVehicleCommand.
+
+SendCmdDoReposition:
+  class_name: ${PROJECT_NAME}::SendCmdDoReposition
+  description: "Commands the vehicle to reposition to a global WGS84 location (VEHICLE_CMD_DO_REPOSITION) while respecting mode-executor ownership"
   # The topic (incl. its message version suffix) is resolved in the node implementation, see SendVehicleCommand.
 
 CheckNavState:
@@ -67,9 +38,19 @@ CheckNavState:
   description: "Succeeds once the vehicle's active PX4 navigation state (nav_state) matches the expected one"
   # The topic (incl. its message version suffix) is resolved in the node implementation, see CheckNavState.
 
+CheckArmingState:
+  class_name: ${PROJECT_NAME}::CheckArmingState
+  description: "Succeeds once the vehicle's PX4 arming state matches the expected one (1 = disarmed, 2 = armed)"
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see CheckArmingState.
+
+CheckModeCompleted:
+  class_name: ${PROJECT_NAME}::CheckModeCompleted
+  description: "Succeeds once the PX4 mode with the expected nav_state reports successful completion (mode_completed)"
+  # The topic (incl. its message version suffix) is resolved in the node implementation, see CheckModeCompleted.
+
 GetModeNavState:
   class_name: ${PROJECT_NAME}::GetModeNavState
-  description: "Resolves a registered PX4 mode's name to the nav_state (mode id) PX4 assigned it during registration"
+  description: "Resolves a PX4 mode's name to its nav_state (mode id) - builtin modes plus any registered custom mode"
   topic: registered_modes
 
 GetGlobalPosition:

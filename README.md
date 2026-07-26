@@ -33,17 +33,17 @@ It builds on the [PX4/ROS 2 Control Interface](https://docs.px4.io/main/en/ros2/
 ## Writing custom PX4 modes
 
 A custom mode is a subclass of `px4_ros2::ModeBase`. This package offers two composable helpers depending on how the
-mode is meant to be activated. Both wait for the FMU, register the mode, and (for plain modes) announce the mode's
+mode is meant to be activated. Both wait for the FMU, register the mode, and announce the mode's
 dynamically assigned `nav_state` on the `registered_modes` topic so behaviors can discover it by name.
 
 | Helper | Base class for your mode | How the mode is activated | Typical use |
 | --- | --- | --- | --- |
-| `ModeRegistrationFactory<ModeT>` | `px4_ros2::ModeBase` | By switching to its `nav_state` (e.g. from a behavior tree via `SwitchMode`/`GetModeNavState`, an RC switch or the GCS) | A self-contained mode that runs autonomously once selected |
+| `ModeRegistrationFactory<ModeT>` | `px4_ros2::ModeBase` | By switching to its `nav_state` (e.g. from a behavior tree via `SendCmdSetNavState`/`GetModeNavState`, an RC switch or the GCS) | A self-contained mode that runs autonomously once selected |
 | `ModeProxyActionFactory<ActionT, ModeT>` | `auto_apms_px4::ActionDrivenMode<ActionT>` | By sending a goal to the ROS 2 action server the factory creates | A mode driven by a request with a goal/feedback/result (a "skill") |
 
 Under the hood both compose a
 [`ModeRegistrationHandler`](auto_apms_px4/include/auto_apms_px4/mode_registration.hpp), which owns the registration sequence (wait
-for FMU → register → announce). You can also use `ModeRegistrationHandler` directly if you manage the mode's lifetime
+for FMU → register → announce). You can also use `ModeRegistrationHandler` in your custom class directly if you want to manage the mode's lifetime
 yourself.
 
 ### 1. A plain mode — `ModeRegistrationFactory`
@@ -85,7 +85,8 @@ RCLCPP_COMPONENTS_REGISTER_NODE(my_pkg::MyModeComponent)
 ```
 
 Once registered, the mode is announced on `registered_modes`. A behavior tree can then resolve its `nav_state` with
-`GetModeNavState` and switch to it with `SwitchMode` (see `behavior/custom_modes.xml`).
+`GetModeNavState` and switch to it with `SendCmdSetNavState` (see the `SwitchToNamedModeAndWait` tree in
+`behavior/vehicle_command.xml`).
 
 ### 2. An action-driven mode ("skill") — `ModeProxyActionFactory`
 
@@ -138,23 +139,53 @@ RCLCPP_COMPONENTS_REGISTER_NODE(my_pkg::MySkill)
 
 The skill sources under [`src/skill/`](auto_apms_px4/src/skill) are complete, working examples of this pattern.
 
-### Deployment convention
+## The behavior mode executor
 
-`auto_apms_px4` sticks to `rclcpp_components` but does not force it: the factories only require a
-`(const rclcpp::NodeOptions &)` constructor and expose `get_node_base_interface()`, so they can be composed into a
-process however you like. When using components, register each node in CMake:
+The [`BehaviorModeExecutor`](auto_apms_px4/include/auto_apms_px4/behavior_mode_executor.hpp) is a
+`px4_ros2::ModeExecutorBase` that owns a placeholder PX4 mode and runs an AutoAPMS behavior *in-process* whenever the
+FMU puts it in charge (the mode is selected via RC switch, GCS or `immediately`). It is configured entirely through
+ROS 2 parameters (see [`config/behavior_mode_executor_params.yaml`](auto_apms_px4/config/behavior_mode_executor_params.yaml)):
+which behavior to build, when it may be activated, and how to react once the behavior succeeds or fails
+(`hold`/`rtl`/`land`/`disarm`/`complete`/`none`). All parameters except `activation` and `mode_name` are dynamic and
+may be changed at runtime (e.g. `ros2 param set`); the new values take effect the next time the executor is put in
+charge. `activation` and `mode_name` are read only because the owned mode is registered with the FMU once at startup.
 
-```cmake
-add_library(my_modes SHARED src/my_mode.cpp src/my_skill.cpp)
-target_link_libraries(my_modes PUBLIC auto_apms_px4::auto_apms_px4 rclcpp_components::component)
-rclcpp_components_register_nodes(my_modes
-  "my_pkg::MyModeComponent"
-  "my_pkg::MySkill"
-)
+Unlike a plain custom mode, a mode executor is *not* announced on `registered_modes` — it cannot be targeted by
+`SwitchMode` from another behavior tree. It is the mechanism for triggering automation *from PX4 itself*.
+
+### Deploying a behavior
+
+The bundled example [`behavior/example.xml`](auto_apms_px4/behavior/example.xml) takes off and immediately lands
+again. It reuses the `DoTakeoff` and `DoLanding` subtrees from
+[`behavior/vehicle_command.xml`](auto_apms_px4/behavior/vehicle_command.xml) by pulling them in with `<include>`
+elements:
+
+```xml
+<include autoapms="auto_apms_px4::vehicle_command::DoTakeoff"/>
+<include autoapms="auto_apms_px4::vehicle_command::DoLanding"/>
 ```
 
-Then run them with `ros2 run rclcpp_components component_container` + `ros2 component load`, or via a launch file
-(see this package's `launch/` directory for examples).
+An AutoAPMS `<include>` supports three ways to locate the included trees:
+
+- `autoapms="<package>::<file_stem>::<tree_name>"` — resolve a registered tree resource by its identity (no knowledge
+  of any install location needed). This **cherry-picks the individual tree** named by the identity plus the trees it
+  transitively depends on via `<SubTree>` (so `DoTakeoff` also brings `SetModeTakeoff` and `SwitchModeAndWait`), rather
+  than the whole file. A helper shared between two includes (here `SwitchModeAndWait`) is merged only once.
+- `path="..." ros_pkg="<package>"` — a path relative to the package's share directory.
+- `path="..."` — a plain filesystem path (fragile: relative paths resolve against the current working directory).
+
+Behaviors are registered as tree resources via `auto_apms_behavior_tree_register_trees()` in CMake. The resulting resource identity is `<package>::<file_stem>::<tree_name>`, so this example is addressed as `auto_apms_px4::example::TakeoffAndLand`.
+
+**How to launch the behavior mode executor with the example behavior:**
+
+The `behavior` argument takes the resource identity:
+
+```bash
+ros2 launch auto_apms_px4 behavior_mode_executor_launch.py \
+  behavior:=auto_apms_px4::example::TakeoffAndLand
+```
+
+Other arguments (inspect using the `-s` argument) map directly to the executor's parameters. Once the owned mode is selected in the GCS (or with `activation:=immediately`), the executor takes charge and runs the behavior.
 
 ## Further reading
 

@@ -158,7 +158,7 @@ rclcpp_components_register_node(${PROJECT_NAME}_behavior_mode_executor
 # ------------ Behavior tree nodes --------------
 #
 # Behavior tree node plugins for orchestrating PX4 from a behavior tree: skill action nodes (Arm, Takeoff, GoTo, ...),
-# the generic SendVehicleCommand and its SwitchMode specialization, and helper condition/action nodes (CheckNavState,
+# the generic SendVehicleCommand and its SendCmdSetNavState specialization, and helper condition/action nodes (CheckNavState,
 # GetModeNavState, GetPosition). Loaded at runtime by the behavior tree executor.
 
 add_library(${PROJECT_NAME}_behavior_tree_nodes SHARED
@@ -171,10 +171,13 @@ add_library(${PROJECT_NAME}_behavior_tree_nodes SHARED
   "src/node/action/rtl.cpp"
   "src/node/action/takeoff.cpp"
   "src/node/action/send_vehicle_command.cpp"
-  "src/node/action/switch_mode.cpp"
+  "src/node/action/send_cmd_set_nav_state.cpp"
+  "src/node/action/send_cmd_do_reposition.cpp"
   "src/node/action/set_actuators.cpp"
   "src/node/sub/get_position.cpp"
   "src/node/sub/check_nav_state.cpp"
+  "src/node/sub/check_arming_state.cpp"
+  "src/node/sub/check_mode_completed.cpp"
   "src/node/sub/get_mode_nav_state.cpp"
 )
 # Give the plugin sources the public SendVehicleCommand header and the AUTO_APMS_PX4_SOURCE_COMPONENT_GLOBAL_KEY
@@ -194,6 +197,7 @@ target_include_directories(${PROJECT_NAME}_behavior_tree_nodes PRIVATE
 target_compile_definitions(${PROJECT_NAME}_behavior_tree_nodes PRIVATE
   AUTO_APMS_PX4_SOURCE_COMPONENT_GLOBAL_KEY="${AUTO_APMS_PX4_SOURCE_COMPONENT_GLOBAL_KEY}"
   AUTO_APMS_PX4_MODE_EXECUTOR_ACTIVE_GLOBAL_KEY="${AUTO_APMS_PX4_MODE_EXECUTOR_ACTIVE_GLOBAL_KEY}"
+  AUTO_APMS_PX4_EXPORT_NODE_PLUGIN
 )
 auto_apms_behavior_tree_register_nodes(${PROJECT_NAME}_behavior_tree_nodes
   "${PROJECT_NAME}::ArmAction"
@@ -206,13 +210,16 @@ auto_apms_behavior_tree_register_nodes(${PROJECT_NAME}_behavior_tree_nodes
   "${PROJECT_NAME}::SetActuatorsAction"
   "${PROJECT_NAME}::TakeoffAction"
   "${PROJECT_NAME}::SendVehicleCommand"
-  "${PROJECT_NAME}::SwitchMode"
+  "${PROJECT_NAME}::SendCmdSetNavState"
+  "${PROJECT_NAME}::SendCmdDoReposition"
   "${PROJECT_NAME}::CheckNavState"
+  "${PROJECT_NAME}::CheckArmingState"
+  "${PROJECT_NAME}::CheckModeCompleted"
   "${PROJECT_NAME}::GetModeNavState"
   "${PROJECT_NAME}::GetPosition<GlobalPositionMsg>"
   "${PROJECT_NAME}::GetPosition<LocalPositionMsg>"
   NODE_MANIFEST
-  "config/behavior_tree_nodes.yaml.in"
+  "config/node_manifest.yaml.in"
   NODE_MANIFEST_ALIAS
   behavior_tree_nodes
   NODE_MODEL_HEADER_TARGET ${PROJECT_NAME}
@@ -224,8 +231,8 @@ auto_apms_behavior_tree_register_nodes(${PROJECT_NAME}_behavior_tree_nodes
 
 auto_apms_behavior_tree_register_trees(
   "behavior/relative_goto.xml"
-  "behavior/builtin_modes.xml"
-  "behavior/custom_modes.xml"
+  "behavior/vehicle_command.xml"
+  "behavior/example.xml"
   NODE_MANIFEST
   "auto_apms_behavior_tree::behavior_tree_nodes"
   "${PROJECT_NAME}::behavior_tree_nodes"
