@@ -83,7 +83,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "on_failure",
-                default_value="rtl",
+                default_value="hold",
                 description="Reaction after the behavior fails",
                 choices=["hold", "rtl", "land", "disarm", "complete", "none"],
             ),

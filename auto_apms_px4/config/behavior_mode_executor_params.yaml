@@ -16,7 +16,7 @@ auto_apms_px4::behavior_mode_executor_params:
   # Dynamic parameter: changes take effect on the next activation (when the executor is next put in charge).
   on_completion:
     type: string
-    default_value: complete
+    default_value: hold
     description: "In-charge reaction after the behavior succeeds (hold | rtl | land | disarm | complete | none). Applied on the next activation."
     validation:
       one_of<>: [["hold", "rtl", "land", "disarm", "complete", "none"]]

@@ -55,9 +55,9 @@ public:
 
   static BT::PortsList providedPorts()
   {
-    return providedBasicPorts({
+    return {
       BT::InputPort<int>(INPUT_KEY_NAV_STATE, "PX4 navigation state (mode id) whose completion is awaited."),
-    });
+    };
   }
 
   BT::NodeStatus onTick(const std::shared_ptr<px4_msgs::msg::ModeCompleted> & last_msg_ptr) final

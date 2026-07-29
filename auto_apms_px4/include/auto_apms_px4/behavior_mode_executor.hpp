@@ -77,10 +77,14 @@ private:
  * @ingroup auto_apms_px4
  * @brief PX4 mode executor that runs an AutoAPMS behavior in-process when put in charge by the FMU.
  *
- * When the owned mode is selected (RC switch, GCS or `ActivateImmediately`), PX4 puts this executor in charge and
- * `onActivate()` starts the configured behavior on the in-process behavior tree executor (@p engine). A pilot override
- * or failsafe triggers `onDeactivate()`, which halts the behavior. When the behavior finishes, a configurable
- * in-charge reaction (hold/RTL/land/disarm/complete/none) is performed.
+ * The behavior tree is built ahead of time and kept detached (see prepareTree): the potentially expensive tree
+ * construction (which instantiates the ROS 2 waitables of the behavior tree nodes) happens once when the node is
+ * constructed and again after every run, off the activation path. When the owned mode is selected (RC switch, GCS or
+ * `ActivateImmediately`), PX4 puts this executor in charge and `onActivate()` hands the pre-built tree to the
+ * in-process executor (@p engine) via `startExecution`, so activation only recreates the lightweight execution timer
+ * and starts ticking. A pilot override or failsafe triggers `onDeactivate()`, which terminates the behavior. When the
+ * behavior finishes, a configurable in-charge reaction (hold/RTL/land/disarm/complete/none) is performed and a fresh
+ * tree is prepared for the next activation.
  *
  * The behavior itself is built from standard AutoAPMS nodes and drives the vehicle through the regular PX4 skills.
  * Before starting, the executor publishes its `VehicleCommand` source component on the global blackboard (under the
@@ -115,9 +119,10 @@ public:
    * @brief Constructor.
    * @param owned_mode Placeholder mode owned by this executor.
    * @param settings PX4 mode executor settings (activation policy).
-   * @param config_provider Callable returning the current Config. It is invoked once here and again at the start of
-   *   every activation so runtime parameter changes take effect on the next run (see onActivate). It must stay valid
-   *   for the lifetime of this executor and is expected to keep any underlying parameter listener alive.
+   * @param config_provider Callable returning the current Config. It is invoked whenever a tree is prepared (once at
+   *   construction and again after each run, see prepareTree) and at the start of every activation, so runtime
+   *   parameter changes take effect on the next run. It must stay valid for the lifetime of this executor and is
+   *   expected to keep any underlying parameter listener alive.
    * @param engine In-process behavior tree executor used to run the behavior.
    */
   BehaviorModeExecutor(
@@ -126,6 +131,18 @@ public:
 
   void onActivate() override;
   void onDeactivate(DeactivateReason reason) override;
+
+  /**
+   * @brief Build the configured behavior tree and keep it detached, ready to be executed on the next activation.
+   *
+   * Snapshots the current configuration, publishes the mode-executor-active flag on the global blackboard (so the
+   * behavior tree nodes pick it up as they construct) and builds the tree via the in-process executor's
+   * makeTreeConstructor. This is the expensive step (it instantiates the ROS 2 waitables of the behavior tree nodes)
+   * and is intentionally kept off the activation path: it is called once when the node is constructed (before FMU
+   * registration, so a build failure prevents the mode from being registered) and again after every run.
+   * @throw std::exception if the tree cannot be built (e.g. an empty or invalid build request).
+   */
+  void prepareTree();
 
   /**
    * @brief Parse a string into a CompletionReaction.
@@ -159,6 +176,8 @@ private:
   auto_apms_behavior_tree::GenericTreeExecutorNode & behavior_executor_;
   std::function<Config()> config_provider_;
   Config config_;  ///< Snapshot of the configuration, refreshed from config_provider_ on each activation.
+  /// Detached, pre-built behavior tree handed to the executor on activation (see prepareTree).
+  std::unique_ptr<auto_apms_behavior_tree::Tree> prepared_tree_ptr_;
 };
 
 /**

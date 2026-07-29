@@ -63,15 +63,24 @@ void BehaviorModeExecutor::onExecutionResult(ExecutionResult result)
 {
   RCLCPP_INFO(node_.get_logger(), "Behavior execution result: %s.", auto_apms_behavior_tree::toStr(result).c_str());
 
-  // If we lost charge in the meantime (pilot/failsafe), don't fight the FMU.
-  if (!isInCharge()) {
+  // If we lost charge in the meantime (pilot/failsafe), don't fight the FMU: skip the completion reaction. We still
+  // prepare a fresh tree below so the next activation stays lightweight.
+  if (isInCharge()) {
+    const CompletionReaction reaction =
+      result == ExecutionResult::TREE_SUCCEEDED ? config_.on_completion : config_.on_failure;
+    performReaction(reaction, result);
+  } else {
     RCLCPP_INFO(node_.get_logger(), "No longer in charge. Skipping completion reaction");
-    return;
   }
 
-  const CompletionReaction reaction =
-    result == ExecutionResult::TREE_SUCCEEDED ? config_.on_completion : config_.on_failure;
-  performReaction(reaction, result);
+  // Rebuild the detached tree so the next time this executor is put in charge, activation does not pay the tree
+  // construction cost. A build failure here (e.g. an invalid build request set at runtime) leaves no prepared tree;
+  // the next activation then reports an error instead of running a stale one.
+  try {
+    prepareTree();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(node_.get_logger(), "Failed to prepare behavior tree for the next activation: %s", e.what());
+  }
 }
 
 BehaviorModeExecutor::CompletionReaction BehaviorModeExecutor::reactionFromString(const std::string & str)
@@ -88,13 +97,13 @@ BehaviorModeExecutor::CompletionReaction BehaviorModeExecutor::reactionFromStrin
 
 void BehaviorModeExecutor::onActivate()
 {
-  // Refresh the configuration from the current parameter values so runtime changes (e.g. via `ros2 param set`) take
-  // effect on this activation. The registration-time parameters (activation policy, mode name) are latched when the
-  // mode is registered with the FMU and are not part of this snapshot.
+  // Refresh the configuration from the current parameter values so runtime changes (e.g. via `ros2 param set`) to the
+  // completion reactions and failsafe deferral take effect on this activation. The behavior itself was already built
+  // (see prepareTree); its build request is latched at build time.
   config_ = config_provider_();
 
-  if (config_.spec.build_request.empty()) {
-    RCLCPP_ERROR(node_.get_logger(), "Cannot start behavior: parameter 'behavior.build_request' must not be empty");
+  if (!prepared_tree_ptr_) {
+    RCLCPP_ERROR(node_.get_logger(), "Cannot start behavior: no pre-built behavior tree is available");
     onExecutionResult(ExecutionResult::ERROR);
     return;
   }
@@ -111,23 +120,19 @@ void BehaviorModeExecutor::onActivate()
   }
 
   // Publish the executor's VehicleCommand source component on the global blackboard so that ownership-aware behavior
-  // tree nodes (e.g. SendCmdSetNavState) can attribute their commands to this executor. Stored as int to match the type
-  // read by the SendCmdSetNavState node. The global key already carries the '@' prefix; on the global blackboard (which
-  // is its own root) this resolves to the same entry the tree nodes read transitively.
+  // tree nodes (e.g. SendCmdSetNavState) can attribute their commands to this executor. Those nodes read it at tick
+  // time, so setting it here (id() is valid once registered) is sufficient. Stored as int to match the type read by
+  // the SendCmdSetNavState node. The global key already carries the '@' prefix; on the global blackboard (which is its
+  // own root) this resolves to the same entry the tree nodes read transitively.
   const int source_component = static_cast<int>(px4_msgs::msg::VehicleCommand::COMPONENT_MODE_EXECUTOR_START) + id();
   behavior_executor_.getGlobalBlackboardPtr()->set(AUTO_APMS_PX4_SOURCE_COMPONENT_GLOBAL_KEY, source_component);
 
-  // Flag that a mode executor is in charge so SendVehicleCommand routes commands through the mode-executor command
-  // topic. Set before the behavior tree is built (below), so the flag is already readable when its nodes construct.
-  behavior_executor_.getGlobalBlackboardPtr()->set(AUTO_APMS_PX4_MODE_EXECUTOR_ACTIVE_GLOBAL_KEY, true);
-
-  auto_apms_behavior_tree::core::NodeManifest node_manifest;
-  if (!config_.spec.node_manifest.empty()) {
-    node_manifest = auto_apms_behavior_tree::core::NodeManifest::decode(config_.spec.node_manifest);
-  }
-
+  // Hand the pre-built tree to the executor. This only (re)creates the lightweight execution timer and starts ticking;
+  // the expensive tree construction already happened in prepareTree.
+  const auto executor_params = behavior_executor_.getExecutorParameters();
   try {
-    behavior_executor_.startExecution(config_.spec.build_request, config_.spec.entry_point, node_manifest);
+    behavior_executor_.startExecution(
+      std::move(prepared_tree_ptr_), executor_params.tick_rate, executor_params.groot2_port);
   } catch (const std::exception & e) {
     RCLCPP_ERROR(node_.get_logger(), "Failed to start behavior: %s", e.what());
     onExecutionResult(ExecutionResult::ERROR);
@@ -148,6 +153,38 @@ void BehaviorModeExecutor::onDeactivate(DeactivateReason reason)
   if (config_.defer_failsafes) {
     deferFailsafesSync(false);
   }
+}
+
+void BehaviorModeExecutor::prepareTree()
+{
+  const Config config = config_provider_();
+  if (config.spec.build_request.empty()) {
+    throw std::invalid_argument("Cannot prepare behavior tree: parameter 'behavior.build_request' must not be empty");
+  }
+
+  // Flag that a mode executor is in charge so SendVehicleCommand routes commands through the mode-executor command
+  // topic. This must be set before the tree is built below, because the command nodes latch their command topic from
+  // this flag as they construct. The behavior executor is dedicated to this mode executor, so the flag stays true for
+  // the lifetime of its global blackboard.
+  behavior_executor_.getGlobalBlackboardPtr()->set(AUTO_APMS_PX4_MODE_EXECUTOR_ACTIVE_GLOBAL_KEY, true);
+
+  auto_apms_behavior_tree::core::NodeManifest node_manifest;
+  if (!config.spec.node_manifest.empty()) {
+    node_manifest = auto_apms_behavior_tree::core::NodeManifest::decode(config.spec.node_manifest);
+  }
+
+  // Build the tree now: this is the expensive step because it instantiates the ROS 2 waitables of the behavior tree
+  // nodes. The tree is kept detached until the next activation hands it to the executor. Its blackboard is rooted at
+  // the executor's global blackboard so that '@'-prefixed entries resolve at runtime (mirroring what
+  // TreeExecutorBase::startExecution does for the TreeConstructor overloads).
+  const auto_apms_behavior_tree::TreeConstructor make_tree =
+    behavior_executor_.makeTreeConstructor(config.spec.build_request, config.spec.entry_point, node_manifest);
+  const auto_apms_behavior_tree::TreeBlackboardSharedPtr main_tree_bb_ptr =
+    auto_apms_behavior_tree::TreeBlackboard::create(behavior_executor_.getGlobalBlackboardPtr());
+  prepared_tree_ptr_ = std::make_unique<auto_apms_behavior_tree::Tree>(make_tree(main_tree_bb_ptr));
+
+  RCLCPP_INFO(
+    node_.get_logger(), "Behavior tree '%s' built and ready for activation", config.spec.build_request.c_str());
 }
 
 void BehaviorModeExecutor::performReaction(CompletionReaction reaction, ExecutionResult result)
@@ -257,6 +294,11 @@ BehaviorModeExecutorNode::BehaviorModeExecutorNode(const rclcpp::NodeOptions & o
   owned_mode_ptr_ = std::make_unique<BehaviorOwnedMode>(*getNodePtr(), px4_ros2::ModeBase::Settings{params.mode_name});
 
   executor_ptr_ = std::make_unique<BehaviorModeExecutor>(*owned_mode_ptr_, settings, std::move(config_provider), *this);
+
+  // Build the behavior tree up front so the expensive tree construction (instantiating the behavior tree nodes' ROS 2
+  // waitables) happens here instead of on the activation path. If building fails, the exception propagates and the mode
+  // is never registered with the FMU.
+  executor_ptr_->prepareTree();
 
   // Wait for the FMU and register the executor together with its owned mode
   registration_handler_.registerMode(*executor_ptr_, params.mode_name);

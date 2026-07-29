@@ -85,10 +85,10 @@ public:
 
   static BT::PortsList providedPorts()
   {
-    return providedBasicPorts({
+    return {
       BT::InputPort<std::string>(INPUT_KEY_MODE_NAME, "Name of the registered PX4 mode to resolve."),
       BT::OutputPort<int>(OUTPUT_KEY_NAV_STATE, "Resolved PX4 navigation state (mode id) of the named mode."),
-    });
+    };
   }
 
   BT::NodeStatus onTick(const std::shared_ptr<auto_apms_px4_interfaces::msg::RegisteredMode> & last_msg_ptr) final
