@@ -81,11 +81,28 @@ public:
   bool syncActivateFlightMode(const FlightMode & mode) const;
   bool syncActivateFlightMode(const px4_ros2::ModeBase * const mode_ptr) const;
 
+  /**
+   * @brief Activate a flight mode and block until the vehicle actually reports it as active.
+   *
+   * Unlike syncActivateFlightMode(), which only waits for the command acknowledgement, this variant additionally
+   * waits for `fmu/out/vehicle_status` to report the requested `nav_state` as active. This confirms the mode change
+   * really took effect (and, for a mode owned by a mode executor, that the executor has been put in charge) rather
+   * than merely that the FMU accepted the request.
+   * @param mode_id Target PX4 navigation state (mode id).
+   * @param timeout Maximum time to wait for the target nav_state to become active.
+   * @return `true` if the target nav_state became active within @p timeout, `false` otherwise (command rejected or
+   * the mode never became active in time).
+   */
+  bool syncActivateFlightModeAndWait(uint8_t mode_id, const std::chrono::milliseconds & timeout) const;
+  bool syncActivateFlightModeAndWait(
+    const px4_ros2::ModeBase * const mode_ptr, const std::chrono::milliseconds & timeout) const;
+
 private:
   rclcpp::Node & node_;
   const rclcpp::Logger logger_;
   rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_pub_;
   rclcpp::Subscription<px4_msgs::msg::VehicleCommandAck>::SharedPtr vehicle_command_ack_sub_;
+  rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_;
   const std::chrono::milliseconds command_timeout_;
 };
 

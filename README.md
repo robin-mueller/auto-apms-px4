@@ -28,7 +28,7 @@ It builds on the [PX4/ROS 2 Control Interface](https://docs.px4.io/main/en/ros2/
 - **Custom mode infrastructure**: base classes and composable helpers for writing, registering and deploying custom PX4 modes. See [Writing custom modes](#writing-custom-px4-modes) below.
 - **Skills**: ready-to-use `rclcpp_components` nodes that wrap the common standard PX4 modes as ROS 2 action servers. Bring them up with [`launch/skills_launch.py`](auto_apms_px4/launch/skills_launch.py).
 - **Behavior tree nodes**: plugins for orchestrating PX4 from a behavior tree, exported under the node manifest alias `auto_apms_px4::behavior_tree_nodes`. The full port-level reference is published in the guide: [Behavior Tree Nodes › auto_apms_px4](https://autoapms.github.io/auto-apms-guide/reference/behavior-tree-nodes#overview-auto-apms-px4).
-- **Behavior mode executor**: a PX4 mode executor that runs an AutoAPMS behavior in-process when put in charge by the FMU. Configured entirely via ROS 2 parameters; see [`config/behavior_mode_executor_params.yaml`](auto_apms_px4/config/behavior_mode_executor_params.yaml) and [`launch/behavior_mode_executor_launch.py`](auto_apms_px4/launch/behavior_mode_executor_launch.py).
+- **Behavior mode executor**: a PX4 mode executor that runs an AutoAPMS behavior in-process when put in charge by the FMU. Configured via ROS 2 parameters, with a `set_behavior` service and a `StartTreeExecutor` action to safely change (and trigger) the behavior at runtime; see [`config/behavior_mode_executor_params.yaml`](auto_apms_px4/config/behavior_mode_executor_params.yaml) and [`launch/behavior_mode_executor_launch.py`](auto_apms_px4/launch/behavior_mode_executor_launch.py).
 
 ## Writing custom PX4 modes
 
@@ -146,9 +146,12 @@ The [`BehaviorModeExecutor`](auto_apms_px4/include/auto_apms_px4/behavior_mode_e
 FMU puts it in charge (the mode is selected via RC switch, GCS or `immediately`). It is configured entirely through
 ROS 2 parameters (see [`config/behavior_mode_executor_params.yaml`](auto_apms_px4/config/behavior_mode_executor_params.yaml)):
 which behavior to build, when it may be activated, and how to react once the behavior succeeds or fails
-(`hold`/`rtl`/`land`/`disarm`/`complete`/`none`). All parameters except `activation` and `mode_name` are dynamic and
-may be changed at runtime (e.g. `ros2 param set`); the new values take effect the next time the executor is put in
-charge. `activation` and `mode_name` are read only because the owned mode is registered with the FMU once at startup.
+(`hold`/`rtl`/`land`/`disarm`/`complete`/`none`). The reaction parameters (`on_completion`, `on_failure`,
+`defer_failsafes`) are dynamic and may be changed at runtime (e.g. `ros2 param set`); the new values take effect the
+next time the executor is put in charge. `activation` and `mode_name` are read only because the owned mode is
+registered with the FMU once at startup. The `behavior.*` parameters (`build_request`, `entry_point`, `node_manifest`)
+are **read only too** — they only seed the *initial* behavior; the behavior is changed at runtime through the
+`set_behavior` service or the `StartTreeExecutor` action (see [below](#changing-the-behavior-at-runtime)).
 
 Unlike a plain custom mode, a mode executor is *not* announced on `registered_modes` — it cannot be targeted by
 `SwitchMode` from another behavior tree. It is the mechanism for triggering automation *from PX4 itself*.
@@ -185,7 +188,42 @@ ros2 launch auto_apms_px4 behavior_mode_executor_launch.py \
   behavior:=auto_apms_px4::example::TakeoffAndLand
 ```
 
-Other arguments (inspect using the `-s` argument) map directly to the executor's parameters. Once the owned mode is selected in the GCS (or with `activation:=immediately`), the executor takes charge and runs the behavior.
+Other arguments (inspect using the `-s` argument) map directly to the executor's parameters. Once the owned mode is activated (e.g. by selecting it in QGroundControl, using `activation:=immediately` or by calling the `start` ROS 2 action), the executor takes charge and runs the behavior.
+
+Note that activation still obeys the `activation` policy and vehicle state (e.g. under `armed` the vehicle must be
+armed).
+
+### Changing the behavior at runtime
+
+Because the `behavior.*` parameters are read only, the behavior is changed through two interfaces that both **verify a
+candidate before committing to it**: the executor builds the candidate's tree (which validates its structure and
+instantiates its nodes) and only latches it if the build succeeds. A malformed or unresolvable behavior is rejected and
+the previously prepared one is kept, so the executor is never left without a runnable behavior. Both accept an optional
+`build_handler` (fully qualified class name; empty keeps the current one) — switching it obeys the
+`allow_other_build_handlers` option.
+
+**`~/set_behavior` service** ([`auto_apms_interfaces/srv/SetBehavior`](https://github.com/AutoAPMS/auto-apms)) — safely
+change the current behavior *without* running it. Rejected while a behavior is running or the executor is in charge.
+
+```bash
+ros2 service call /behavior_mode_executor/set_behavior auto_apms_interfaces/srv/SetBehavior \
+  "{build_request: 'auto_apms_px4::example::TakeoffAndLand'}"
+# -> success: true, message: "Behavior '...' verified and set"
+```
+
+**`~/start` action** ([`auto_apms_interfaces/action/StartTreeExecutor`](https://github.com/AutoAPMS/auto-apms)) — change
+the behavior **and** trigger it from ROS 2. After verifying the behavior (the goal is rejected if it does not build),
+the executor requests activation of its owned mode and confirms it by waiting for the mode's `nav_state` to become
+active. An attached goal (`attach: true`, the default) then stays open and returns the tree result on termination; a
+detached goal succeeds as soon as activation is confirmed.
+
+```bash
+ros2 action send_goal /behavior_mode_executor/start auto_apms_interfaces/action/StartTreeExecutor \
+  "{build_request: 'auto_apms_px4::example::TakeoffAndLand', attach: true}" --feedback
+
+# OR (requires auto_apms_ros2behavior to be installed)
+ros2 behavior send /behavior_mode_executor/start auto_apms_px4::example::TakeoffAndLand
+```
 
 ## Further reading
 

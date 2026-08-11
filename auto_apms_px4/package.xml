@@ -12,6 +12,7 @@
   <buildtool_depend>eigen3_cmake_module</buildtool_depend>
 
   <depend>auto_apms_util</depend>
+  <depend>auto_apms_interfaces</depend>
   <depend>auto_apms_px4_interfaces</depend>
   <depend>auto_apms_behavior_tree_core</depend>
   <depend>auto_apms_behavior_tree</depend>

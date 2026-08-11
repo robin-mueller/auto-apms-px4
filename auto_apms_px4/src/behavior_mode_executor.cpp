@@ -49,13 +49,16 @@ void BehaviorOwnedMode::updateSetpoint(float /*dt_s*/)
 
 BehaviorModeExecutor::BehaviorModeExecutor(
   BehaviorOwnedMode & owned_mode, const px4_ros2::ModeExecutorBase::Settings & settings,
-  std::function<Config()> config_provider, auto_apms_behavior_tree::GenericTreeExecutorNode & engine)
+  std::function<Config()> config_provider, BehaviorSpec initial_spec,
+  auto_apms_behavior_tree::GenericTreeExecutorNode & engine)
 : px4_ros2::ModeExecutorBase(settings, owned_mode),
   node_(owned_mode.node()),
   owned_mode_(owned_mode),
   behavior_executor_(engine),
   config_provider_(std::move(config_provider)),
-  config_(config_provider_())
+  config_(config_provider_()),
+  current_spec_(std::move(initial_spec)),
+  vehicle_command_client_(node_)
 {
 }
 
@@ -109,7 +112,7 @@ void BehaviorModeExecutor::onActivate()
   }
 
   RCLCPP_INFO(
-    node_.get_logger(), "Behavior executor put in charge. Starting behavior '%s'", config_.spec.build_request.c_str());
+    node_.get_logger(), "Behavior executor put in charge. Starting behavior '%s'", current_spec_.build_request.c_str());
 
   if (config_.defer_failsafes) {
     if (deferFailsafesSync(true)) {
@@ -155,13 +158,8 @@ void BehaviorModeExecutor::onDeactivate(DeactivateReason reason)
   }
 }
 
-void BehaviorModeExecutor::prepareTree()
+std::unique_ptr<auto_apms_behavior_tree::Tree> BehaviorModeExecutor::buildTree(const BehaviorSpec & spec)
 {
-  const Config config = config_provider_();
-  if (config.spec.build_request.empty()) {
-    throw std::invalid_argument("Cannot prepare behavior tree: parameter 'behavior.build_request' must not be empty");
-  }
-
   // Flag that a mode executor is in charge so SendVehicleCommand routes commands through the mode-executor command
   // topic. This must be set before the tree is built below, because the command nodes latch their command topic from
   // this flag as they construct. The behavior executor is dedicated to this mode executor, so the flag stays true for
@@ -169,8 +167,8 @@ void BehaviorModeExecutor::prepareTree()
   behavior_executor_.getGlobalBlackboardPtr()->set(AUTO_APMS_PX4_MODE_EXECUTOR_ACTIVE_GLOBAL_KEY, true);
 
   auto_apms_behavior_tree::core::NodeManifest node_manifest;
-  if (!config.spec.node_manifest.empty()) {
-    node_manifest = auto_apms_behavior_tree::core::NodeManifest::decode(config.spec.node_manifest);
+  if (!spec.node_manifest.empty()) {
+    node_manifest = auto_apms_behavior_tree::core::NodeManifest::decode(spec.node_manifest);
   }
 
   // Build the tree now: this is the expensive step because it instantiates the ROS 2 waitables of the behavior tree
@@ -178,13 +176,44 @@ void BehaviorModeExecutor::prepareTree()
   // the executor's global blackboard so that '@'-prefixed entries resolve at runtime (mirroring what
   // TreeExecutorBase::startExecution does for the TreeConstructor overloads).
   const auto_apms_behavior_tree::TreeConstructor make_tree =
-    behavior_executor_.makeTreeConstructor(config.spec.build_request, config.spec.entry_point, node_manifest);
+    behavior_executor_.makeTreeConstructor(spec.build_request, spec.entry_point, node_manifest);
   const auto_apms_behavior_tree::TreeBlackboardSharedPtr main_tree_bb_ptr =
     auto_apms_behavior_tree::TreeBlackboard::create(behavior_executor_.getGlobalBlackboardPtr());
-  prepared_tree_ptr_ = std::make_unique<auto_apms_behavior_tree::Tree>(make_tree(main_tree_bb_ptr));
+  return std::make_unique<auto_apms_behavior_tree::Tree>(make_tree(main_tree_bb_ptr));
+}
 
+void BehaviorModeExecutor::prepareTree()
+{
+  prepared_tree_ptr_ = buildTree(current_spec_);
   RCLCPP_INFO(
-    node_.get_logger(), "Behavior tree '%s' built and ready for activation", config.spec.build_request.c_str());
+    node_.get_logger(), "Behavior tree '%s' built and ready for activation", current_spec_.build_request.c_str());
+}
+
+bool BehaviorModeExecutor::setBehavior(const BehaviorSpec & candidate, std::string & message)
+{
+  // Verify the candidate by building its tree. This validates the tree structure and instantiates its nodes, so a
+  // malformed or unresolvable behavior throws here and the currently prepared tree and spec are left untouched.
+  std::unique_ptr<auto_apms_behavior_tree::Tree> candidate_tree;
+  try {
+    candidate_tree = buildTree(candidate);
+  } catch (const std::exception & e) {
+    message = e.what();
+    RCLCPP_WARN(node_.get_logger(), "Rejecting behavior '%s': %s", candidate.build_request.c_str(), message.c_str());
+    return false;
+  }
+
+  // Latch the verified tree and spec atomically: from here on this is what the next activation runs.
+  prepared_tree_ptr_ = std::move(candidate_tree);
+  current_spec_ = candidate;
+  message = "Behavior '" + candidate.build_request + "' verified and set";
+  RCLCPP_INFO(node_.get_logger(), "%s", message.c_str());
+  return true;
+}
+
+bool BehaviorModeExecutor::requestAndVerifyActivation(std::chrono::milliseconds timeout)
+{
+  RCLCPP_INFO(node_.get_logger(), "Requesting activation of owned mode (nav_state %d)", owned_mode_.id());
+  return vehicle_command_client_.syncActivateFlightModeAndWait(&owned_mode_, timeout);
 }
 
 void BehaviorModeExecutor::performReaction(CompletionReaction reaction, ExecutionResult result)
@@ -258,31 +287,34 @@ px4_ros2::ModeExecutorBase::Settings::Activation BehaviorModeExecutorNode::activ
 BehaviorModeExecutorNode::BehaviorModeExecutorNode(const rclcpp::NodeOptions & options)
 : GenericTreeExecutorNode(
     "behavior_mode_executor",
-    auto_apms_behavior_tree::TreeExecutorNodeOptions(options).enableStrictUnkownParameterRemoval(false)),
-  registration_handler_(getNodePtr())
+    // Disable declaring parameters from overrides for the scripting-enum and blackboard groups (runtime/dynamic use is
+    // kept). Without this the base would set automatically_declare_parameters_from_overrides(true), which declares the
+    // launch-provided `behavior.*` parameters as writable before generate_parameter_library runs - making it skip its
+    // `read_only` descriptor. With auto-declaration off, generate_parameter_library declares `behavior.*` itself (read
+    // only) while still picking up the launch-provided initial values. All other launch parameters are explicitly
+    // declared, so none rely on override auto-declaration.
+    auto_apms_behavior_tree::TreeExecutorNodeOptions(options)
+      .enableStrictUnkownParameterRemoval(false)
+      .enableScriptingEnumParameters(false, true)
+      .enableGlobalBlackboardParameters(false, true)),
+  registration_handler_(getNodePtr()),
+  start_action_context_(logger_)
 {
   // Declares all behavior-specific parameters via generate_parameter_library. The listener is kept alive for the
   // lifetime of the executor (captured by the config provider below) so its parameter-validation callback stays
-  // registered and get_params() keeps reflecting runtime changes. The behavior parameters are declared writable (not
-  // read_only), so they can be updated at runtime; the new values are picked up on the next activation (see
-  // BehaviorModeExecutor::onActivate). Only `activation` and `mode_name` are read only, because the owned mode is
-  // registered with the FMU once, here in the constructor.
+  // registered and get_params() keeps reflecting runtime changes. The behavior parameters (`behavior.*`) are read
+  // only: they only seed the initial behavior below. The behavior is changed at runtime exclusively through the
+  // `set_behavior` service and the `StartTreeExecutor` action, which verify a candidate before latching it. Only the
+  // reaction parameters remain writable and are re-read on each activation via the config provider.
   const auto param_listener_ptr = std::make_shared<behavior_mode_executor_params::ParamListener>(getNodePtr());
   const behavior_mode_executor_params::Params params = param_listener_ptr->get_params();
 
-  if (params.behavior.build_request.empty()) {
-    throw std::invalid_argument("Parameter 'behavior.build_request' must not be empty.");
-  }
-
-  // Builds a fresh Config from the current parameter values. Invoked by the executor on every activation so runtime
-  // parameter changes take effect. The reaction strings are constrained to valid values by the parameter validation
-  // (one_of<>), so reactionFromString never sees an invalid value here.
+  // Builds a fresh Config (completion reactions and failsafe deferral only) from the current parameter values. Invoked
+  // by the executor on every activation so runtime parameter changes take effect. The reaction strings are constrained
+  // to valid values by the parameter validation (one_of<>), so reactionFromString never sees an invalid value here.
   auto config_provider = [param_listener_ptr]() -> BehaviorModeExecutor::Config {
     const behavior_mode_executor_params::Params p = param_listener_ptr->get_params();
     BehaviorModeExecutor::Config config;
-    config.spec.build_request = p.behavior.build_request;
-    config.spec.entry_point = p.behavior.entry_point;
-    config.spec.node_manifest = p.behavior.node_manifest;
     config.on_completion = BehaviorModeExecutor::reactionFromString(p.on_completion);
     config.on_failure = BehaviorModeExecutor::reactionFromString(p.on_failure);
     config.defer_failsafes = p.defer_failsafes;
@@ -293,20 +325,208 @@ BehaviorModeExecutorNode::BehaviorModeExecutorNode(const rclcpp::NodeOptions & o
 
   owned_mode_ptr_ = std::make_unique<BehaviorOwnedMode>(*getNodePtr(), px4_ros2::ModeBase::Settings{params.mode_name});
 
-  executor_ptr_ = std::make_unique<BehaviorModeExecutor>(*owned_mode_ptr_, settings, std::move(config_provider), *this);
+  BehaviorSpec initial_spec;
+  initial_spec.build_request = params.behavior.build_request;
+  initial_spec.build_handler =
+    current_build_handler_name_;  // Handler loaded by the base from the 'build_handler' param.
+  initial_spec.entry_point = params.behavior.entry_point;
+  initial_spec.node_manifest = params.behavior.node_manifest;
 
-  // Build the behavior tree up front so the expensive tree construction (instantiating the behavior tree nodes' ROS 2
-  // waitables) happens here instead of on the activation path. If building fails, the exception propagates and the mode
-  // is never registered with the FMU.
-  executor_ptr_->prepareTree();
+  mode_executor_ptr_ = std::make_unique<BehaviorModeExecutor>(
+    *owned_mode_ptr_, settings, std::move(config_provider), std::move(initial_spec), *this);
+
+  // Build the initial behavior tree up front so the expensive tree construction (instantiating the behavior tree
+  // nodes' ROS 2 waitables) happens here instead of on the activation path. If building fails, the exception
+  // propagates and the mode is never registered with the FMU.
+  mode_executor_ptr_->prepareTree();
 
   // Wait for the FMU and register the executor together with its owned mode
-  registration_handler_.registerMode(*executor_ptr_, params.mode_name);
+  registration_handler_.registerMode(*mode_executor_ptr_, params.mode_name);
+
+  // Interfaces for changing the behavior at runtime. Both verify a candidate behavior (by building its tree) before
+  // latching it; the action additionally triggers execution by requesting activation of the owned mode.
+  set_behavior_service_ptr_ = getNodePtr()->create_service<SetBehaviorSrv>(
+    "~/set_behavior",
+    std::bind(&BehaviorModeExecutorNode::handleSetBehavior, this, std::placeholders::_1, std::placeholders::_2));
+
+  start_action_ptr_ = rclcpp_action::create_server<StartAction>(
+    getNodePtr(), "~/start",
+    std::bind(&BehaviorModeExecutorNode::handleStartGoal, this, std::placeholders::_1, std::placeholders::_2),
+    std::bind(&BehaviorModeExecutorNode::handleStartCancel, this, std::placeholders::_1),
+    std::bind(&BehaviorModeExecutorNode::handleStartAccept, this, std::placeholders::_1));
+}
+
+bool BehaviorModeExecutorNode::applyBehavior(BehaviorSpec candidate, std::string & message)
+{
+  // Apply the requested build handler (mirroring the standard executor's goal handling), remembering the previous one
+  // so it can be restored if the subsequent build fails.
+  const std::string previous_handler = current_build_handler_name_;
+  bool switched = false;
+  if (!candidate.build_handler.empty() && candidate.build_handler != current_build_handler_name_) {
+    if (!getExecutorParameters().allow_other_build_handlers) {
+      message = "Build handler '" + candidate.build_handler +
+                "' rejected: the 'Allow other build handlers' option is "
+                "disabled (current: '" +
+                current_build_handler_name_ + "')";
+      RCLCPP_WARN(logger_, "%s", message.c_str());
+      return false;
+    }
+    try {
+      loadBuildHandler(candidate.build_handler);
+      switched = true;
+    } catch (const std::exception & e) {
+      message = std::string("Failed to load build handler '") + candidate.build_handler + "': " + e.what();
+      RCLCPP_WARN(logger_, "%s", message.c_str());
+      return false;
+    }
+  }
+
+  // Record the effective handler so the latched spec reflects reality even when the request kept the current one.
+  candidate.build_handler = current_build_handler_name_;
+
+  if (mode_executor_ptr_->setBehavior(candidate, message)) return true;
+
+  // Verification failed: undo the handler switch so executor state is left untouched.
+  if (switched) {
+    try {
+      loadBuildHandler(previous_handler);
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(logger_, "Failed to restore previous build handler '%s': %s", previous_handler.c_str(), e.what());
+    }
+  }
+  return false;
+}
+
+void BehaviorModeExecutorNode::handleSetBehavior(
+  const std::shared_ptr<SetBehaviorSrv::Request> request, std::shared_ptr<SetBehaviorSrv::Response> response)
+{
+  // Changing the behavior rebuilds the prepared tree, which must not race a running behavior (the prepared tree is
+  // moved into the executor while it runs and rebuilt on termination).
+  if (isBusy() || mode_executor_ptr_->isInCharge()) {
+    response->success = false;
+    response->message = "Cannot change behavior while a behavior is running or the executor is in charge";
+    RCLCPP_WARN(logger_, "%s", response->message.c_str());
+    return;
+  }
+
+  BehaviorSpec candidate;
+  candidate.build_request = request->build_request;
+  candidate.build_handler = request->build_handler;
+  candidate.entry_point = request->entry_point;
+  candidate.node_manifest = request->node_manifest;
+
+  std::string message;
+  response->success = applyBehavior(candidate, message);
+  response->message = message;
+}
+
+rclcpp_action::GoalResponse BehaviorModeExecutorNode::handleStartGoal(
+  const rclcpp_action::GoalUUID & uuid, std::shared_ptr<const StartAction::Goal> goal_ptr)
+{
+  if (isBusy() || mode_executor_ptr_->isInCharge()) {
+    RCLCPP_WARN(
+      logger_, "Goal %s REJECTED: a behavior is already running or the executor is in charge",
+      rclcpp_action::to_string(uuid).c_str());
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+
+  // Apply the requested build handler (if any) and verify+latch the behavior; reject the goal if it does not build.
+  BehaviorSpec candidate;
+  candidate.build_request = goal_ptr->build_request;
+  candidate.build_handler = goal_ptr->build_handler;
+  candidate.entry_point = goal_ptr->entry_point;
+  candidate.node_manifest = goal_ptr->node_manifest;
+
+  std::string message;
+  if (!applyBehavior(candidate, message)) {
+    RCLCPP_WARN(logger_, "Goal %s REJECTED: %s", rclcpp_action::to_string(uuid).c_str(), message.c_str());
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+
+  pending_attach_[uuid] = goal_ptr->attach;
+  pending_clear_blackboard_[uuid] = goal_ptr->clear_blackboard;
+  return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+}
+
+rclcpp_action::CancelResponse BehaviorModeExecutorNode::handleStartCancel(
+  std::shared_ptr<StartGoalHandle> /*goal_handle_ptr*/)
+{
+  setControlCommand(ControlCommand::TERMINATE);
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
+
+void BehaviorModeExecutorNode::handleStartAccept(std::shared_ptr<StartGoalHandle> goal_handle_ptr)
+{
+  const rclcpp_action::GoalUUID uuid = goal_handle_ptr->get_goal_id();
+  const bool attach = pending_attach_.extract(uuid).mapped();
+  const bool clear_blackboard = pending_clear_blackboard_.extract(uuid).mapped();
+
+  if (clear_blackboard) clearGlobalBlackboard();
+
+  // Request activation of the owned mode and wait until it is confirmed active (the executor is put in charge and the
+  // prepared tree starts running). This uses the client's own wait set, so it does not depend on this node being spun
+  // by an external executor.
+  auto result_ptr = std::make_shared<StartAction::Result>();
+  if (!mode_executor_ptr_->requestAndVerifyActivation()) {
+    result_ptr->tree_result = StartAction::Result::TREE_RESULT_NOT_SET;
+    result_ptr->message = "Failed to activate the owned mode (not put in charge within the timeout)";
+    RCLCPP_ERROR(logger_, "%s", result_ptr->message.c_str());
+    goal_handle_ptr->abort(result_ptr);
+    return;
+  }
+
+  if (!attach) {
+    // Detached: succeed as soon as activation is verified; the behavior keeps running under the mode executor.
+    result_ptr->tree_result = StartAction::Result::TREE_RESULT_NOT_SET;
+    result_ptr->message = "Owned mode activated; behavior running detached";
+    goal_handle_ptr->succeed(result_ptr);
+    return;
+  }
+
+  // Attached: keep the goal open and resolve it in onTermination with the tree result.
+  start_action_context_.setUp(goal_handle_ptr);
+  RCLCPP_INFO(logger_, "Owned mode activated; tracking behavior execution for attached goal.");
 }
 
 void BehaviorModeExecutorNode::onTermination(const ExecutionResult & result)
 {
-  executor_ptr_->onExecutionResult(result);
+  mode_executor_ptr_->onExecutionResult(result);
+
+  // Resolve an attached StartTreeExecutor goal, if one is open. Behaviors started from a GCS/RC (no open goal) leave
+  // the context invalid and are unaffected.
+  if (!start_action_context_.isValid()) return;
+
+  const std::shared_ptr<StartAction::Result> result_ptr = start_action_context_.getResultPtr();
+  result_ptr->terminated_tree_identity = getTreeName();
+  switch (result) {
+    case ExecutionResult::TREE_SUCCEEDED:
+      result_ptr->tree_result = StartAction::Result::TREE_RESULT_SUCCESS;
+      result_ptr->message = "Tree execution finished with status SUCCESS";
+      start_action_context_.succeed();
+      break;
+    case ExecutionResult::TREE_FAILED:
+      result_ptr->tree_result = StartAction::Result::TREE_RESULT_FAILURE;
+      result_ptr->message = "Tree execution finished with status FAILURE";
+      start_action_context_.abort();
+      break;
+    case ExecutionResult::TERMINATED_PREMATURELY:
+      result_ptr->tree_result = StartAction::Result::TREE_RESULT_NOT_SET;
+      if (start_action_context_.getGoalHandlePtr()->is_canceling()) {
+        result_ptr->message = "Tree execution canceled successfully";
+        start_action_context_.cancel();
+      } else {
+        result_ptr->message = "Tree execution terminated prematurely";
+        start_action_context_.abort();
+      }
+      break;
+    case ExecutionResult::ERROR:
+    default:
+      result_ptr->tree_result = StartAction::Result::TREE_RESULT_NOT_SET;
+      result_ptr->message = "An unexpected error occurred during tree execution";
+      start_action_context_.abort();
+      break;
+  }
+  start_action_context_.invalidate();
 }
 
 }  // namespace auto_apms_px4

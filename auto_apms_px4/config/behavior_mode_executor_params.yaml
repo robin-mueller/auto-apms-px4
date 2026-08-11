@@ -35,18 +35,22 @@ auto_apms_px4::behavior_mode_executor_params:
     default_value: false
     description: "Defer FMU failsafes while a behavior is running (in-charge privilege). Applied on the next activation."
 
-  # Dynamic parameters: which behavior to run. Changes take effect on the next activation (when the executor is next
-  # put in charge); the currently running behavior is not affected.
+  # Read-only parameters: they seed the INITIAL behavior only. After startup the behavior is changed exclusively through
+  # the 'set_behavior' service or the StartTreeExecutor action, both of which verify the new behavior by building its
+  # tree before latching it (an invalid behavior is rejected and the previous one is kept).
   behavior:
     build_request:
       type: string
       default_value: ""
-      description: "Behavior build request executed when the executor is put in charge (must not be empty). Applied on the next activation."
+      read_only: true
+      description: "Initial behavior build request. Changed at runtime via the 'set_behavior' service or the StartTreeExecutor action, not this parameter."
     entry_point:
       type: string
       default_value: ""
-      description: "Single point of entry for behavior execution. Applied on the next activation."
+      read_only: true
+      description: "Initial single point of entry for behavior execution. Changed at runtime via the 'set_behavior' service or the StartTreeExecutor action, not this parameter."
     node_manifest:
       type: string
       default_value: ""
-      description: "Encoded node manifest specifying additional behavior tree nodes to load. Applied on the next activation."
+      read_only: true
+      description: "Initial encoded node manifest specifying additional behavior tree nodes to load. Changed at runtime via the 'set_behavior' service or the StartTreeExecutor action, not this parameter."

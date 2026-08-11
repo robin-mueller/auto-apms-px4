@@ -14,6 +14,7 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(auto_apms_util REQUIRED)
+find_package(auto_apms_interfaces REQUIRED)
 find_package(auto_apms_px4_interfaces REQUIRED)
 find_package(auto_apms_behavior_tree_core REQUIRED)
 find_package(auto_apms_behavior_tree REQUIRED)
@@ -142,6 +143,7 @@ target_link_libraries(${PROJECT_NAME}_behavior_mode_executor PUBLIC
   Eigen3::Eigen
   auto_apms_util::auto_apms_util
   auto_apms_behavior_tree::auto_apms_behavior_tree
+  ${auto_apms_interfaces_TARGETS}
 )
 
 target_compile_definitions(${PROJECT_NAME}_behavior_mode_executor PRIVATE

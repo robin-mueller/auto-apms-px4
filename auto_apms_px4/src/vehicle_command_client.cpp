@@ -45,6 +45,13 @@ VehicleCommandClient::VehicleCommandClient(rclcpp::Node & node, const std::chron
   vehicle_command_ack_sub_ = node_.create_subscription<px4_msgs::msg::VehicleCommandAck>(
     "fmu/out/vehicle_command_ack" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleCommandAck>(),
     rclcpp::QoS(1).best_effort(), [](px4_msgs::msg::VehicleCommandAck::UniquePtr msg) { (void)msg; });
+
+  // Used by syncActivateFlightModeAndWait() to confirm that a commanded mode change actually took effect. Like the
+  // acknowledgement subscription, messages are drained synchronously via a wait set (see below), so the callback is a
+  // no-op.
+  vehicle_status_sub_ = node_.create_subscription<px4_msgs::msg::VehicleStatus>(
+    "fmu/out/vehicle_status" + px4_ros2::getMessageNameVersion<px4_msgs::msg::VehicleStatus>(), rclcpp::SensorDataQoS{},
+    [](px4_msgs::msg::VehicleStatus::UniquePtr msg) { (void)msg; });
 }
 
 VehicleCommandClient::SendCommandResult VehicleCommandClient::syncSendVehicleCommand(
@@ -152,6 +159,47 @@ bool VehicleCommandClient::syncActivateFlightMode(const FlightMode & mode) const
 bool VehicleCommandClient::syncActivateFlightMode(const px4_ros2::ModeBase * const mode_ptr) const
 {
   return syncActivateFlightMode(mode_ptr->id());
+}
+
+bool VehicleCommandClient::syncActivateFlightModeAndWait(
+  uint8_t mode_id, const std::chrono::milliseconds & timeout) const
+{
+  // First request the mode change and make sure the FMU accepts the command at all.
+  if (syncSendVehicleCommand(VehicleCommand::VEHICLE_CMD_SET_NAV_STATE, mode_id) != SendCommandResult::ACCEPTED) {
+    RCLCPP_WARN(logger_, "syncActivateFlightModeAndWait: Command to switch to nav_state %u was not accepted", mode_id);
+    return false;
+  }
+
+  // Then wait for the vehicle to actually report the requested nav_state as active. Drain the status subscription
+  // synchronously via a wait set, mirroring syncSendVehicleCommand(), so this does not depend on the node being spun
+  // by an external executor.
+  using StatusWaitSet = rclcpp::StaticWaitSet<1, 0, 0, 0, 0, 0>;
+  StatusWaitSet wait_set({{{vehicle_status_sub_}}});
+
+  const auto start_time = std::chrono::steady_clock::now();
+  while (true) {
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= start_time + timeout) {
+      RCLCPP_WARN(logger_, "syncActivateFlightModeAndWait: Timeout waiting for nav_state %u to become active", mode_id);
+      return false;
+    }
+
+    const rclcpp::WaitResult<StatusWaitSet> wait_ret = wait_set.wait(timeout - (now - start_time));
+    if (wait_ret.kind() != rclcpp::WaitResultKind::Ready) continue;
+
+    px4_msgs::msg::VehicleStatus status;
+    rclcpp::MessageInfo info;
+    if (vehicle_status_sub_->take(status, info) && status.nav_state == mode_id) {
+      RCLCPP_DEBUG(logger_, "syncActivateFlightModeAndWait: nav_state %u is now active", mode_id);
+      return true;
+    }
+  }
+}
+
+bool VehicleCommandClient::syncActivateFlightModeAndWait(
+  const px4_ros2::ModeBase * const mode_ptr, const std::chrono::milliseconds & timeout) const
+{
+  return syncActivateFlightModeAndWait(mode_ptr->id(), timeout);
 }
 
 }  // namespace auto_apms_px4
